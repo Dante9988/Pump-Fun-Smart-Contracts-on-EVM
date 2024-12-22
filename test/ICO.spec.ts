@@ -57,6 +57,7 @@ describe('ICO', () => {
 
     });
 
+    
     it(`should create a pool`, async () => {
         const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
         const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
@@ -168,6 +169,102 @@ describe('ICO', () => {
             console.log(error);
         }
 
+    });
+
+
+    it(`should bundle liquidity`, async () => {
+        const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+        const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
+
+        const priceRatio = Math.log(3 * Math.pow(10, -12)) / Math.log(1.0001);
+        const tick = Math.floor(priceRatio);
+        const sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick).toString();
+
+        const chainId = await ethers.provider.getNetwork().then((network: any) => network.chainId);
+        const token1 = new Token(
+            chainId,
+            uniswapV3.WETH9.address,
+            await uniswapV3.WETH9.decimals(),
+            await uniswapV3.WETH9.symbol(),
+            await uniswapV3.WETH9.name()
+        );
+
+        const token2 = new Token(
+            chainId,
+            uniswapV3.ERC20.address,
+            await uniswapV3.ERC20.decimals(),
+            await uniswapV3.ERC20.symbol(),
+            await uniswapV3.ERC20.name()
+        );
+
+        const sortedTokens = constant.sortedTokens(token1, token2);
+
+        // approve ICO to spend the tokens
+        let approveTxn = await uniswapV3.WETH9.approve(ico.address, tokens(10000));
+        await approveTxn.wait();
+        console.log(`Approved ICO to spend WETH9 at: ${approveTxn.hash}`);
+
+        approveTxn = await uniswapV3.ERC20.approve(ico.address, tokens(10000));
+        await approveTxn.wait();
+        console.log(`Approved ICO to spend ERC20 at: ${approveTxn.hash}`);
+
+        // Double check approvals
+        console.log('Allowances:');
+        console.log('WETH allowance:', ethers.utils.formatEther(await uniswapV3.WETH9.allowance(await deployer.getAddress(), ico.address)));
+        console.log('ERC20 allowance:', ethers.utils.formatEther(await uniswapV3.ERC20.allowance(await deployer.getAddress(), ico.address)));
+
+
+        const mintParams = {
+            tokenA: sortedTokens[0].address,
+            tokenB: sortedTokens[1].address,
+            fee: FEE_AMOUNT_LOW.FEE_AMOUNT,
+            tickLower: FEE_AMOUNT_LOW.TICK_LOWER,
+            tickUpper: FEE_AMOUNT_LOW.TICK_UPPER,
+            amountA: tokens(100),
+            amountB: tokens(100),
+            amount0Min: tokens(0),
+            amount1Min: tokens(0),
+            recipient: await deployer.getAddress(),
+            deadline: deadline,
+            sqrtPriceX96: sqrtPriceX96,
+        }
+
+        const transaction = await ico.connect(deployer as unknown as Signer).bundleLiquidity(
+            mintParams
+        );
+
+        await transaction.wait();
+        expect(transaction).to.not.be.null;
+        expect(transaction).to.not.be.undefined;
+        console.log(`Pool created at: ${transaction.hash}`);
+
+        let events = await ico.queryFilter(ico.filters.PoolCreated(), 0, "latest");
+
+        events.forEach((event, index) => {
+            console.log(`\n=== Event #${index} ===`);
+            console.log("Block Number:", event.blockNumber);
+            console.log("Transaction Hash:", event.transactionHash);
+            console.log("Pool Address:", event.args?.poolAddress);
+        });
+        expect(events.length).to.be.greaterThan(0);
+        expect(events[0].args?.poolAddress).to.not.be.null;
+
+        events = await ico.queryFilter(ico.filters.LiquidityAdded(), 0, "latest");
+
+        events.forEach((event, index) => {
+            console.log(`\n=== Event #${index} ===`);
+            console.log("Block Number:", event.blockNumber);
+            console.log("Transaction Hash:", event.transactionHash);
+            console.log("Pool Address:", event.args?.poolAddress);
+            console.log("TokenId:", event.args?.tokenId);
+            console.log("TokenA:", event.args?.tokenA);
+            console.log("TokenB:", event.args?.tokenB);
+        });
+        expect(events.length).to.be.greaterThan(0);
+        expect(events[0].args?.tokenId).to.not.be.null;
+        expect(events[0].args?.poolAddress).to.not.be.null;
+        expect(events[0].args?.tokenA).to.not.be.null;
+        expect(events[0].args?.tokenB).to.not.be.null;
     });
 
 });

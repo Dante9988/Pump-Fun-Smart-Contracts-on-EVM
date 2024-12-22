@@ -4,7 +4,7 @@ pragma abicoder v2;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "hardhat/console.sol";
-import "./Token.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IUniswapV3Pools.sol";
 import "./interfaces/IUniswapV3Factory.sol";
 import "./interfaces/INonfungiblePositionManager.sol";
@@ -49,6 +49,7 @@ contract LiquidityProvider {
         swapRouter = ISwapRouter(_swapRouter);
     }
 
+
     function createPool(
         address tokenA,
         address tokenB,
@@ -64,10 +65,6 @@ contract LiquidityProvider {
         require(tokenA != address(0) && tokenB != address(0), "Invalid token addresses");
         require(tokenA < tokenB);
 
-        console.log('TokenA', tokenA);
-        console.log('TokenB', tokenB);
-        console.log('Fee', fee);
-        console.log('SqrtPriceX96', sqrtPriceX96);
         if (factory.getPool(tokenA, tokenB, fee) == address(0)) {
             poolAddress = nonfungiblePositionManager.createAndInitializePoolIfNecessary(
                 tokenA,
@@ -85,6 +82,7 @@ contract LiquidityProvider {
 
         return poolAddress;
     }
+
 
     function mintPosition(
         MintPositionParams calldata params
@@ -140,6 +138,21 @@ contract LiquidityProvider {
         require(tokenA != tokenB, 'IDENTICAL_ADDRESSES');
         (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(token0 != address(0), 'ZERO_ADDRESS');
+    }
+
+    function bundleLiquidity(MintPositionParams calldata params) external returns (address poolAddress, uint256 tokenId) 
+    {
+        poolAddress = createPool(
+            params.tokenA, 
+            params.tokenB, 
+            params.fee, 
+            params.amountA, 
+            params.amountB, 
+            params.sqrtPriceX96
+        );
+        require(poolAddress != address(0), "Pool creation failed");
+        tokenId = mintPosition(params);
+        require(tokenId != 0, "Minting position failed");
     }
 
     function getAmountsForSortedTokens(
