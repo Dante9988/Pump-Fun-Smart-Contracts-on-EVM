@@ -18,3 +18,4 @@ ignition/deployments/chain-31337
 .env
 node_modules
 package-lock.json
+/tools/common/UniswapV3Address_31337.json
