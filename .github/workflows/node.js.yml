@@ -9,10 +9,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
+      
     strategy:
       matrix:
-        node-version: [22.x]  # Using LTS version of Node
+        node-version: [22.x]
 
     steps:
     - uses: actions/checkout@v3
@@ -21,18 +21,16 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'yarn'
 
     - name: Install dependencies
-      run: |
-        yarn install --frozen-lockfile
+      run: yarn install
 
     - name: Run ICO tests
+      env:
+        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}  # Can also set at step level
       run: yarn test:ico
       
     - name: Run AMM tests
+      env:
+        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
       run: yarn test:amm
-
-    - name: Run all tests (fallback)
-      if: failure()
-      run: yarn test
