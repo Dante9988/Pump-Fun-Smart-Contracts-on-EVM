@@ -4,7 +4,8 @@ pragma abicoder v2;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "hardhat/console.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./Token.sol";
+import "./interfaces/IMultiAMM.sol";
 import "./interfaces/IUniswapV3Pools.sol";
 import "./interfaces/IUniswapV3Factory.sol";
 import "./interfaces/INonfungiblePositionManager.sol";
@@ -26,10 +27,24 @@ contract LiquidityProvider {
         uint256 deadline;
         uint160 sqrtPriceX96;
     }
+
+    struct TokenParams {
+        string name;
+        string symbol;
+        uint8 decimals;
+    }
     
     IUniswapV3Factory public immutable factory;
     INonfungiblePositionManager public immutable nonfungiblePositionManager;
     ISwapRouter public immutable swapRouter;
+    IMultiAMM public immutable amm;
+    address public owner;
+    mapping(address => bool) public whitelisted;
+    address[] public createdTokens;
+    address public WETH9;
+
+    // Token address => owner address
+    mapping(address => address[]) public tokenOwners;
 
     // Event declaration
     event PoolCreated(address indexed poolAddress);
@@ -40,15 +55,81 @@ contract LiquidityProvider {
         address tokenB
     );
 
+    event TokenCreated(address indexed tokenAddress, address indexed owner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
+    modifier onlyWhitelisted() {
+        require(whitelisted[msg.sender], "Only whitelisted users can call this function");
+        _;
+    }
+
     constructor(address _factory, 
     address _nonfungiblePositionManager, 
-    address _swapRouter
+    address _swapRouter,
+    address _weth9,
+    IMultiAMM _amm
     ) {
         factory = IUniswapV3Factory(_factory);
         nonfungiblePositionManager = INonfungiblePositionManager(_nonfungiblePositionManager);
         swapRouter = ISwapRouter(_swapRouter);
+        owner = msg.sender;
+        whitelisted[owner] = true;
+        WETH9 = _weth9;
+        amm = _amm;
     }
 
+    function addWhitelistedUser(address user) external onlyOwner {
+        whitelisted[user] = true;
+    }
+
+    function removeWhitelistedUser(address user) external onlyOwner {
+        whitelisted[user] = false;
+    }
+
+    function getOwnerShares(address tokenAddress) external view returns (uint256, uint256) {
+        return amm.getUserShare(tokenAddress, WETH9, msg.sender);
+    }
+
+    function getTokenPrice(address tokenAddress, address tokenB) external view returns (uint256 priceAinB, uint256 priceBinA) {
+        return amm.getTokenPrice(tokenAddress, tokenB);
+    }
+
+    function createToken(TokenParams calldata params) external returns (address tokenAddress) {
+        require(msg.sender != address(0), "Invalid sender");
+
+        Token token = new Token(params.name, params.symbol, params.decimals, address(this));
+        tokenAddress = address(token);
+        require(tokenAddress != address(0), "Token creation failed");
+        createdTokens.push(tokenAddress);
+        tokenOwners[tokenAddress].push(msg.sender);
+        emit TokenCreated(tokenAddress, msg.sender);
+    }
+
+    function createTokenAndPool(TokenParams calldata params) external returns (address tokenAddress) {
+        tokenAddress = this.createToken(params);
+        uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
+        console.log('Balance before addLiquidity:', balance);
+        console.log('Token address:', tokenAddress);
+    
+        IMultiAMM.Pool memory pool = amm.addLiquidityAtZeroPrice(tokenAddress, WETH9, balance);
+        console.log('Pool tokenBalanceA:', pool.tokenBalanceA);
+        console.log('Pool tokenBalanceB:', pool.tokenBalanceB);
+        console.log('Pool K:', pool.K);
+        console.log('Pool totalShares:', pool.totalShares);
+        console.log('Pool zeroPriceActive:', pool.zeroPriceActive);
+        console.log('Balance after addLiquidity:', IERC20(tokenAddress).balanceOf(address(this)));
+        return tokenAddress;
+    }
+
+    function buyToken(address tokenAddress, uint256 amount) external returns (uint256 amountOut) {
+        amountOut = amm.swapExactTokenBforTokenA(tokenAddress, WETH9, amount);
+        require(amountOut > 0, "Swap failed");
+        return amountOut;
+    }
 
     function createPool(
         address tokenA,
@@ -74,7 +155,7 @@ contract LiquidityProvider {
             );
             require(poolAddress != address(0), "Pool creation failed.");
             console.log('Pool created at:', poolAddress);
-            // Add this line to emit the event
+            
             emit PoolCreated(poolAddress);
         } else {
             poolAddress = factory.getPool(tokenA, tokenB, fee);
@@ -98,8 +179,8 @@ contract LiquidityProvider {
         require(IERC20(params.tokenA).approve(address(nonfungiblePositionManager), params.amountA), "Token A approval failed");
         require(IERC20(params.tokenB).approve(address(nonfungiblePositionManager), params.amountB), "Token B approval failed");
         
-        (address token0, address token1) = sortTokens(params.tokenA, params.tokenB);
-        (uint256 amount0Desired, uint256 amount1Desired) = getAmountsForSortedTokens(
+        (address token0, address token1) = _sortTokens(params.tokenA, params.tokenB);
+        (uint256 amount0Desired, uint256 amount1Desired) = _getAmountsForSortedTokens(
             token0,
             params.tokenA,
             params.amountA,
@@ -134,13 +215,8 @@ contract LiquidityProvider {
         return tokenId;
     }
 
-        function sortTokens(address tokenA, address tokenB) internal pure returns (address token0, address token1) {
-        require(tokenA != tokenB, 'IDENTICAL_ADDRESSES');
-        (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        require(token0 != address(0), 'ZERO_ADDRESS');
-    }
 
-    function bundleLiquidity(MintPositionParams calldata params) external returns (address poolAddress, uint256 tokenId) 
+    function bundleLiquidity(MintPositionParams calldata params) external onlyWhitelisted returns (address poolAddress, uint256 tokenId) 
     {
         poolAddress = createPool(
             params.tokenA, 
@@ -155,7 +231,7 @@ contract LiquidityProvider {
         require(tokenId != 0, "Minting position failed");
     }
 
-    function getAmountsForSortedTokens(
+    function _getAmountsForSortedTokens(
         address token0,
         address tokenA,
         uint256 amountA,
@@ -163,5 +239,11 @@ contract LiquidityProvider {
     ) internal pure returns (uint256 amount0, uint256 amount1) {
         amount0 = token0 == tokenA ? amountA : amountB;
         amount1 = token0 == tokenA ? amountB : amountA;
+    }
+
+    function _sortTokens(address tokenA, address tokenB) internal pure returns (address token0, address token1) {
+        require(tokenA != tokenB, 'IDENTICAL_ADDRESSES');
+        (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(token0 != address(0), 'ZERO_ADDRESS');
     }
 }

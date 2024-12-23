@@ -34,19 +34,33 @@ const tokens = (n: number) => {
 
 describe('ICO', () => {
 
+    let accounts: any;
     let deployer: HardhatEthersSigner;
+    let nonWhitelisted: HardhatEthersSigner;
     let uniswapV3: DeployedContracts;
     let ico: Contract;
     let liquidityProvider: any;
+    let mintParams: any;
+    let multiAMM: Contract;
     before(async () => {
-        deployer = await ethers.provider.getSigner();
-        uniswapV3 = await deployUniswapV3(deployer, ethers.utils.parseEther('1000000'));
+        accounts = await ethers.getSigners();
+        deployer = accounts[0];
+        nonWhitelisted = accounts[1];
+        uniswapV3 = await deployUniswapV3(deployer, ethers.utils.parseUnits('1000000000', 18));
+
+        const MultiAMM = await ethers.getContractFactory('MultiAMM');
+        multiAMM = await MultiAMM.deploy(uniswapV3.WETH9.address);
+        await multiAMM.deployed();
+
+        console.log(`MultiAMM deployed at: ${multiAMM.address}`);
 
         const LiquidityProvider = await ethers.getContractFactory('LiquidityProvider');
         liquidityProvider = await LiquidityProvider.deploy(
             uniswapV3.V3Factory.address, 
             uniswapV3.NFTManager.address, 
-            uniswapV3.SwapRouter.address
+            uniswapV3.SwapRouter.address,
+            uniswapV3.WETH9.address,
+            multiAMM.address
         );
         ico = await liquidityProvider.deployed();
 
@@ -57,214 +71,325 @@ describe('ICO', () => {
 
     });
 
-    
-    it(`should create a pool`, async () => {
-        const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-        const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
+    describe('Success', () => {
+        it(`should create a pool`, async () => {
+            const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+            const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
 
-        const priceRatio = Math.log(3 * Math.pow(10, -12)) / Math.log(1.0001);
-        const tick = Math.floor(priceRatio);
-        const sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick).toString();
+            const priceRatio = Math.log(3 * Math.pow(10, -12)) / Math.log(1.0001);
+            const tick = Math.floor(priceRatio);
+            const sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick).toString();
 
-        const chainId = await ethers.provider.getNetwork().then((network: any) => network.chainId);
-        const token1 = new Token(
-            chainId,
-            uniswapV3.WETH9.address,
-            await uniswapV3.WETH9.decimals(),
-            await uniswapV3.WETH9.symbol(),
-            await uniswapV3.WETH9.name()
-        );
+            const chainId = await ethers.provider.getNetwork().then((network: any) => network.chainId);
+            const token1 = new Token(
+                chainId,
+                uniswapV3.WETH9.address,
+                await uniswapV3.WETH9.decimals(),
+                await uniswapV3.WETH9.symbol(),
+                await uniswapV3.WETH9.name()
+            );
 
-        const token2 = new Token(
-            chainId,
-            uniswapV3.ERC20.address,
-            await uniswapV3.ERC20.decimals(),
-            await uniswapV3.ERC20.symbol(),
-            await uniswapV3.ERC20.name()
-        );
+            const token2 = new Token(
+                chainId,
+                uniswapV3.ERC20.address,
+                await uniswapV3.ERC20.decimals(),
+                await uniswapV3.ERC20.symbol(),
+                await uniswapV3.ERC20.name()
+            );
 
-        const sortedTokens = constant.sortedTokens(token1, token2);
+            const sortedTokens = constant.sortedTokens(token1, token2);
 
-        const mintParams = {
-            tokenA: sortedTokens[0].address,
-            tokenB: sortedTokens[1].address,
-            fee: FEE_AMOUNT_LOW.FEE_AMOUNT,
-            tickLower: FEE_AMOUNT_LOW.TICK_LOWER,
-            tickUpper: FEE_AMOUNT_LOW.TICK_UPPER,
-            amountA: tokens(100),
-            amountB: tokens(100),
-            amount0Min: tokens(0),
-            amount1Min: tokens(0),
-            recipient: await deployer.getAddress(),
-            deadline: deadline,
-            sqrtPriceX96: sqrtPriceX96,
-        }
+            let mintParams = {
+                tokenA: sortedTokens[0].address,
+                tokenB: sortedTokens[1].address,
+                fee: FEE_AMOUNT_LOW.FEE_AMOUNT,
+                tickLower: FEE_AMOUNT_LOW.TICK_LOWER,
+                tickUpper: FEE_AMOUNT_LOW.TICK_UPPER,
+                amountA: tokens(100),
+                amountB: tokens(100),
+                amount0Min: tokens(0),
+                amount1Min: tokens(0),
+                recipient: await deployer.getAddress(),
+                deadline: deadline,
+                sqrtPriceX96: sqrtPriceX96,
+            }
 
-        const transaction = await ico.connect(deployer as unknown as Signer).createPool(
-            sortedTokens[0].address, 
-            sortedTokens[1].address, 
-            FEE_AMOUNT_LOW.FEE_AMOUNT, 
-            tokens(100), 
-            tokens(100), 
-            sqrtPriceX96,
-        );
+            const transaction = await ico.connect(deployer as unknown as Signer).createPool(
+                sortedTokens[0].address,
+                sortedTokens[1].address,
+                FEE_AMOUNT_LOW.FEE_AMOUNT,
+                tokens(100),
+                tokens(100),
+                sqrtPriceX96,
+            );
 
-        await transaction.wait();
-        expect(transaction).to.not.be.null;
-        expect(transaction).to.not.be.undefined;
-        console.log(`Pool created at: ${transaction.hash}`);
+            await transaction.wait();
+            expect(transaction).to.not.be.null;
+            expect(transaction).to.not.be.undefined;
+            console.log(`Pool created at: ${transaction.hash}`);
 
-        console.log(`Token0: ${sortedTokens[0].address}`);
-        console.log(`Token1: ${sortedTokens[1].address}`);
+            console.log(`Token0: ${sortedTokens[0].address}`);
+            console.log(`Token1: ${sortedTokens[1].address}`);
 
-        const events = await ico.queryFilter(ico.filters.PoolCreated(), 0, "latest");
+            const events = await ico.queryFilter(ico.filters.PoolCreated(), 0, "latest");
 
-        events.forEach((event, index) => {
-            console.log(`\n=== Event #${index} ===`);
-            console.log("Block Number:", event.blockNumber);
-            console.log("Transaction Hash:", event.transactionHash);
-            console.log("Pool Address:", event.args?.poolAddress);
+            events.forEach((event, index) => {
+                console.log(`\n=== Event #${index} ===`);
+                console.log("Block Number:", event.blockNumber);
+                console.log("Transaction Hash:", event.transactionHash);
+                console.log("Pool Address:", event.args?.poolAddress);
+            });
+
+            // approve the NFTManager to spend the tokens
+            let approveTxn = await uniswapV3.WETH9.approve(uniswapV3.NFTManager.address, tokens(10000));
+            await approveTxn.wait();
+            console.log(`Approved NFTManager to spend WETH9 at: ${approveTxn.hash}`);
+
+            approveTxn = await uniswapV3.ERC20.approve(uniswapV3.NFTManager.address, tokens(10000));
+            await approveTxn.wait();
+            console.log(`Approved NFTManager to spend ERC20 at: ${approveTxn.hash}`);
+
+            // approve ICO to spend the tokens
+            approveTxn = await uniswapV3.WETH9.approve(ico.address, tokens(10000));
+            await approveTxn.wait();
+            console.log(`Approved ICO to spend WETH9 at: ${approveTxn.hash}`);
+
+            approveTxn = await uniswapV3.ERC20.approve(ico.address, tokens(10000));
+            await approveTxn.wait();
+            console.log(`Approved ICO to spend ERC20 at: ${approveTxn.hash}`);
+
+            // Double check approvals
+            console.log('Allowances:');
+            console.log('WETH allowance:', ethers.utils.formatEther(await uniswapV3.WETH9.allowance(await deployer.getAddress(), ico.address)));
+            console.log('ERC20 allowance:', ethers.utils.formatEther(await uniswapV3.ERC20.allowance(await deployer.getAddress(), ico.address)));
+
+            // Also check balances
+            console.log('\nBalances:');
+            console.log('WETH:', ethers.utils.formatEther(await uniswapV3.WETH9.balanceOf(await deployer.getAddress())));
+            console.log('ERC20:', ethers.utils.formatEther(await uniswapV3.ERC20.balanceOf(await deployer.getAddress())));
+
+            console.log(`Deployer address: ${await deployer.getAddress()}`);
+
+            console.log(`Minting position with params: ${JSON.stringify(mintParams)}`);
+
+            let txn: TransactionResponse;
+            try {
+                txn = await ico.connect(deployer as unknown as Signer).mintPosition(mintParams, { gasLimit: 3000000 })
+                await txn.wait();
+                expect(txn).to.not.be.null;
+                expect(txn).to.not.be.undefined;
+                console.log(`Minted at: ${txn.hash}`);
+            } catch (error) {
+                console.log(error);
+            }
         });
 
-        // approve the NFTManager to spend the tokens
-        let approveTxn = await uniswapV3.WETH9.approve(uniswapV3.NFTManager.address, tokens(10000));
-        await approveTxn.wait();
-        console.log(`Approved NFTManager to spend WETH9 at: ${approveTxn.hash}`);
+        it(`should bundle liquidity`, async () => {
+            const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+            const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
 
-        approveTxn = await uniswapV3.ERC20.approve(uniswapV3.NFTManager.address, tokens(10000));
-        await approveTxn.wait();
-        console.log(`Approved NFTManager to spend ERC20 at: ${approveTxn.hash}`);
+            const priceRatio = Math.log(3 * Math.pow(10, -12)) / Math.log(1.0001);
+            const tick = Math.floor(priceRatio);
+            const sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick).toString();
 
-        // approve ICO to spend the tokens
-        approveTxn = await uniswapV3.WETH9.approve(ico.address, tokens(10000));
-        await approveTxn.wait();
-        console.log(`Approved ICO to spend WETH9 at: ${approveTxn.hash}`);
+            const chainId = await ethers.provider.getNetwork().then((network: any) => network.chainId);
+            const token1 = new Token(
+                chainId,
+                uniswapV3.WETH9.address,
+                await uniswapV3.WETH9.decimals(),
+                await uniswapV3.WETH9.symbol(),
+                await uniswapV3.WETH9.name()
+            );
 
-        approveTxn = await uniswapV3.ERC20.approve(ico.address, tokens(10000));
-        await approveTxn.wait();
-        console.log(`Approved ICO to spend ERC20 at: ${approveTxn.hash}`);
+            const token2 = new Token(
+                chainId,
+                uniswapV3.ERC20.address,
+                await uniswapV3.ERC20.decimals(),
+                await uniswapV3.ERC20.symbol(),
+                await uniswapV3.ERC20.name()
+            );
 
-        // Double check approvals
-        console.log('Allowances:');
-        console.log('WETH allowance:', ethers.utils.formatEther(await uniswapV3.WETH9.allowance(await deployer.getAddress(), ico.address)));
-        console.log('ERC20 allowance:', ethers.utils.formatEther(await uniswapV3.ERC20.allowance(await deployer.getAddress(), ico.address)));
+            const sortedTokens = constant.sortedTokens(token1, token2);
 
-        // Also check balances
-        console.log('\nBalances:');
-        console.log('WETH:', ethers.utils.formatEther(await uniswapV3.WETH9.balanceOf(await deployer.getAddress())));
-        console.log('ERC20:', ethers.utils.formatEther(await uniswapV3.ERC20.balanceOf(await deployer.getAddress())));
+            // approve ICO to spend the tokens
+            let approveTxn = await uniswapV3.WETH9.approve(ico.address, tokens(10000));
+            await approveTxn.wait();
+            console.log(`Approved ICO to spend WETH9 at: ${approveTxn.hash}`);
 
-        console.log(`Deployer address: ${await deployer.getAddress()}`);
+            approveTxn = await uniswapV3.ERC20.approve(ico.address, tokens(10000));
+            await approveTxn.wait();
+            console.log(`Approved ICO to spend ERC20 at: ${approveTxn.hash}`);
 
-        console.log(`Minting position with params: ${JSON.stringify(mintParams)}`);
+            // Double check approvals
+            console.log('Allowances:');
+            console.log('WETH allowance:', ethers.utils.formatEther(await uniswapV3.WETH9.allowance(await deployer.getAddress(), ico.address)));
+            console.log('ERC20 allowance:', ethers.utils.formatEther(await uniswapV3.ERC20.allowance(await deployer.getAddress(), ico.address)));
 
-        let txn: TransactionResponse;
-        try {
-            txn = await ico.connect(deployer as unknown as Signer).mintPosition(mintParams, { gasLimit: 3000000 })
-            await txn.wait();
-            expect(txn).to.not.be.null;
-            expect(txn).to.not.be.undefined;
-            console.log(`Minted at: ${txn.hash}`);
-        } catch (error) {
-            console.log(error);
-        }
+            const mintParams = {
+                tokenA: sortedTokens[0].address,
+                tokenB: sortedTokens[1].address,
+                fee: FEE_AMOUNT_LOW.FEE_AMOUNT,
+                tickLower: FEE_AMOUNT_LOW.TICK_LOWER,
+                tickUpper: FEE_AMOUNT_LOW.TICK_UPPER,
+                amountA: tokens(100),
+                amountB: tokens(100),
+                amount0Min: tokens(0),
+                amount1Min: tokens(0),
+                recipient: await deployer.getAddress(),
+                deadline: deadline,
+                sqrtPriceX96: sqrtPriceX96,
+            }
+
+            const transaction = await ico.connect(deployer as unknown as Signer).bundleLiquidity(
+                mintParams
+            );
+
+            await transaction.wait();
+            expect(transaction).to.not.be.null;
+            expect(transaction).to.not.be.undefined;
+            console.log(`Pool created at: ${transaction.hash}`);
+
+            let events = await ico.queryFilter(ico.filters.PoolCreated(), 0, "latest");
+
+            events.forEach((event, index) => {
+                console.log(`\n=== Event #${index} ===`);
+                console.log("Block Number:", event.blockNumber);
+                console.log("Transaction Hash:", event.transactionHash);
+                console.log("Pool Address:", event.args?.poolAddress);
+            });
+            expect(events.length).to.be.greaterThan(0);
+            expect(events[0].args?.poolAddress).to.not.be.null;
+
+            events = await ico.queryFilter(ico.filters.LiquidityAdded(), 0, "latest");
+
+            events.forEach((event, index) => {
+                console.log(`\n=== Event #${index} ===`);
+                console.log("Block Number:", event.blockNumber);
+                console.log("Transaction Hash:", event.transactionHash);
+                console.log("Pool Address:", event.args?.poolAddress);
+                console.log("TokenId:", event.args?.tokenId);
+                console.log("TokenA:", event.args?.tokenA);
+                console.log("TokenB:", event.args?.tokenB);
+            });
+            expect(events.length).to.be.greaterThan(0);
+            expect(events[0].args?.tokenId).to.not.be.null;
+            expect(events[0].args?.poolAddress).to.not.be.null;
+            expect(events[0].args?.tokenA).to.not.be.null;
+            expect(events[0].args?.tokenB).to.not.be.null;
+        });
+
+        it(`should create a token`, async () => {
+            const tokenParams = {
+                name: "Sad Ethereum",
+                symbol: "SADETH",
+                decimals: 18,
+                totalSupply: tokens(1000000000),
+            }
+
+            let transaction = await ico.connect(deployer as unknown as Signer).createToken(tokenParams);
+            await transaction.wait();
+            expect(transaction).to.not.be.null;
+            expect(transaction).to.not.be.undefined;
+            console.log(`Token created at: ${transaction.hash}`);
+
+            let events = await ico.queryFilter(ico.filters.TokenCreated(), 0, "latest");
+            expect(events.length).to.be.greaterThan(0);
+            expect(events[0].args?.tokenAddress).to.not.be.null;
+            expect(events[0].args?.owner).to.not.be.null;
+
+            
+        });
 
     });
 
+    describe('Failure', async () => {
 
-    it(`should bundle liquidity`, async () => {
-        const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-        const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
+        it('should fail with non whitelisted user', async () => {
+            const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+            const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
 
-        const priceRatio = Math.log(3 * Math.pow(10, -12)) / Math.log(1.0001);
-        const tick = Math.floor(priceRatio);
-        const sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick).toString();
+            const priceRatio = Math.log(3 * Math.pow(10, -12)) / Math.log(1.0001);
+            const tick = Math.floor(priceRatio);
+            const sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick).toString();
 
-        const chainId = await ethers.provider.getNetwork().then((network: any) => network.chainId);
-        const token1 = new Token(
-            chainId,
-            uniswapV3.WETH9.address,
-            await uniswapV3.WETH9.decimals(),
-            await uniswapV3.WETH9.symbol(),
-            await uniswapV3.WETH9.name()
-        );
+            const chainId = await ethers.provider.getNetwork().then((network: any) => network.chainId);
+            const token1 = new Token(
+                chainId,
+                uniswapV3.WETH9.address,
+                await uniswapV3.WETH9.decimals(),
+                await uniswapV3.WETH9.symbol(),
+                await uniswapV3.WETH9.name()
+            );
 
-        const token2 = new Token(
-            chainId,
-            uniswapV3.ERC20.address,
-            await uniswapV3.ERC20.decimals(),
-            await uniswapV3.ERC20.symbol(),
-            await uniswapV3.ERC20.name()
-        );
+            const token2 = new Token(
+                chainId,
+                uniswapV3.ERC20.address,
+                await uniswapV3.ERC20.decimals(),
+                await uniswapV3.ERC20.symbol(),
+                await uniswapV3.ERC20.name()
+            );
 
-        const sortedTokens = constant.sortedTokens(token1, token2);
+            const sortedTokens = constant.sortedTokens(token1, token2);
 
-        // approve ICO to spend the tokens
-        let approveTxn = await uniswapV3.WETH9.approve(ico.address, tokens(10000));
-        await approveTxn.wait();
-        console.log(`Approved ICO to spend WETH9 at: ${approveTxn.hash}`);
+            let mintParams = {
+                tokenA: sortedTokens[0].address,
+                tokenB: sortedTokens[1].address,
+                fee: FEE_AMOUNT_HIGH.FEE_AMOUNT,
+                tickLower: FEE_AMOUNT_HIGH.TICK_LOWER,
+                tickUpper: FEE_AMOUNT_HIGH.TICK_UPPER,
+                amountA: tokens(100),
+                amountB: tokens(100),
+                amount0Min: tokens(0),
+                amount1Min: tokens(0),
+                recipient: await deployer.getAddress(),
+                deadline: deadline,
+                sqrtPriceX96: sqrtPriceX96,
+            }
 
-        approveTxn = await uniswapV3.ERC20.approve(ico.address, tokens(10000));
-        await approveTxn.wait();
-        console.log(`Approved ICO to spend ERC20 at: ${approveTxn.hash}`);
-
-        // Double check approvals
-        console.log('Allowances:');
-        console.log('WETH allowance:', ethers.utils.formatEther(await uniswapV3.WETH9.allowance(await deployer.getAddress(), ico.address)));
-        console.log('ERC20 allowance:', ethers.utils.formatEther(await uniswapV3.ERC20.allowance(await deployer.getAddress(), ico.address)));
-
-
-        const mintParams = {
-            tokenA: sortedTokens[0].address,
-            tokenB: sortedTokens[1].address,
-            fee: FEE_AMOUNT_LOW.FEE_AMOUNT,
-            tickLower: FEE_AMOUNT_LOW.TICK_LOWER,
-            tickUpper: FEE_AMOUNT_LOW.TICK_UPPER,
-            amountA: tokens(100),
-            amountB: tokens(100),
-            amount0Min: tokens(0),
-            amount1Min: tokens(0),
-            recipient: await deployer.getAddress(),
-            deadline: deadline,
-            sqrtPriceX96: sqrtPriceX96,
-        }
-
-        const transaction = await ico.connect(deployer as unknown as Signer).bundleLiquidity(
-            mintParams
-        );
-
-        await transaction.wait();
-        expect(transaction).to.not.be.null;
-        expect(transaction).to.not.be.undefined;
-        console.log(`Pool created at: ${transaction.hash}`);
-
-        let events = await ico.queryFilter(ico.filters.PoolCreated(), 0, "latest");
-
-        events.forEach((event, index) => {
-            console.log(`\n=== Event #${index} ===`);
-            console.log("Block Number:", event.blockNumber);
-            console.log("Transaction Hash:", event.transactionHash);
-            console.log("Pool Address:", event.args?.poolAddress);
+            await expect(ico.connect(nonWhitelisted as unknown as Signer).bundleLiquidity(mintParams)).to.be.revertedWith('Only whitelisted users can call this function');
         });
-        expect(events.length).to.be.greaterThan(0);
-        expect(events[0].args?.poolAddress).to.not.be.null;
+    });
 
-        events = await ico.queryFilter(ico.filters.LiquidityAdded(), 0, "latest");
+    describe('View', async () => {
 
-        events.forEach((event, index) => {
-            console.log(`\n=== Event #${index} ===`);
-            console.log("Block Number:", event.blockNumber);
-            console.log("Transaction Hash:", event.transactionHash);
-            console.log("Pool Address:", event.args?.poolAddress);
-            console.log("TokenId:", event.args?.tokenId);
-            console.log("TokenA:", event.args?.tokenA);
-            console.log("TokenB:", event.args?.tokenB);
+        let tokenAddress: string;
+
+        it(`should add liquidity at zero price`, async () => {
+
+            const tokenParams = {
+                name: "Sad Ethereum",
+                symbol: "SADETH",
+                decimals: 18
+            }
+
+            console.log(`Token params: ${JSON.stringify(tokenParams)}`);
+
+            const transaction = await ico.connect(deployer as unknown as Signer).createTokenAndPool(tokenParams);
+            await transaction.wait();
+            expect(transaction).to.not.be.null;
+            expect(transaction).to.not.be.undefined;
+            console.log(`Token and pool created at: ${transaction.hash}`);
+
+            const events = await ico.queryFilter(ico.filters.TokenCreated(), 0, "latest");
+            console.log(`Events: ${events}`);
+            expect(events.length).to.be.greaterThan(0);
+            expect(events[0].args?.tokenAddress).to.not.be.null;
+            expect(events[0].args?.owner).to.not.be.null;
+
+            console.log(`Token address: ${events[0].args?.tokenAddress}`);
+            tokenAddress = events[0].args?.tokenAddress;
         });
-        expect(events.length).to.be.greaterThan(0);
-        expect(events[0].args?.tokenId).to.not.be.null;
-        expect(events[0].args?.poolAddress).to.not.be.null;
-        expect(events[0].args?.tokenA).to.not.be.null;
-        expect(events[0].args?.tokenB).to.not.be.null;
+
+        it('should make a first swap', async () => {
+
+            
+
+            const transaction = await ico.connect(deployer as unknown as Signer).buyToken(tokenAddress, ethers.utils.parseUnits('1', 6));
+            await transaction.wait();
+            expect(transaction).to.not.be.null;
+            expect(transaction).to.not.be.undefined;
+            console.log(`Swap made at: ${transaction.hash}`);
+        });
     });
 
 });

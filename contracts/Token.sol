@@ -25,7 +25,7 @@ contract Token is IERC20 {
         address indexed owner, address indexed spender, uint256 value
     );
 
-    uint256 public override totalSupply;
+    uint256 public override totalSupply = 1000000000000000000000000000;
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
     string public name;
@@ -33,11 +33,12 @@ contract Token is IERC20 {
     uint8 public decimals;
     address public owner;
 
-    constructor(string memory _name, string memory _symbol, uint8 _decimals) {
+    constructor(string memory _name, string memory _symbol, uint8 _decimals, address _sadEthereum) {
         name = _name;
         symbol = _symbol;
         decimals = _decimals;
         owner = msg.sender;
+        _mint(_sadEthereum, totalSupply);
     }
 
     modifier onlyOwner() {
