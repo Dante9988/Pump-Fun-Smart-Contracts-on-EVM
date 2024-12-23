@@ -18,4 +18,3 @@ ignition/deployments/chain-31337
 .env
 node_modules
 package-lock.json
-package.json
