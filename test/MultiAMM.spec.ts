@@ -282,7 +282,7 @@ describe("MultiPairAMM", function () {
       await transaction.wait();
 
       // Setup zero price pool
-      transaction = await amm.addLiquidityAtZeroPriceForWETH(tokenA.address, INITIAL_TOKENS);
+      transaction = await amm.addLiquidityAtZeroPrice(tokenA.address, INITIAL_TOKENS);
       await transaction.wait();
 
       // Give some tokenB to user1/user2 for testing

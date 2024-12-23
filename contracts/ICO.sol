@@ -115,7 +115,11 @@ contract LiquidityProvider {
         console.log('Balance before addLiquidity:', balance);
         console.log('Token address:', tokenAddress);
     
-        IMultiAMM.Pool memory pool = amm.addLiquidityAtZeroPrice(tokenAddress, WETH9, balance);
+        amm.addLiquidityAtZeroPrice(
+            tokenAddress, balance
+        );
+        bytes32 poolId = amm._getPoolId(tokenAddress, WETH9);
+        IMultiAMM.Pool memory pool = amm.pools(poolId);
         console.log('Pool tokenBalanceA:', pool.tokenBalanceA);
         console.log('Pool tokenBalanceB:', pool.tokenBalanceB);
         console.log('Pool K:', pool.K);
@@ -126,8 +130,15 @@ contract LiquidityProvider {
     }
 
     function buyToken(address tokenAddress, uint256 amount) external returns (uint256 amountOut) {
+        // First, transfer WETH from user to this contract
+        require(IERC20(WETH9).transferFrom(msg.sender, address(this), amount), "WETH transfer failed");
+    
+        // Then approve AMM to spend the WETH
+        require(IERC20(WETH9).approve(address(amm), amount), "WETH approval failed");
+        
         amountOut = amm.swapExactTokenBforTokenA(tokenAddress, WETH9, amount);
-        require(amountOut > 0, "Swap failed");
+        // 4. Transfer received tokens to the user (THIS WAS MISSING)
+        require(IERC20(tokenAddress).transfer(msg.sender, amountOut), "Token transfer to user failed");
         return amountOut;
     }
 

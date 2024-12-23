@@ -5,7 +5,7 @@ pragma abicoder v2;
 interface IMultiAMM {
     struct Pool {
         uint tokenBalanceA;
-        uint tokenBalanceB;
+        uint tokenBalanceB; 
         uint K;             // product = tokenBalanceA * tokenBalanceB
         uint totalShares;   // total LP shares for this pool
         bool zeroPriceActive; // true if we only have tokenA added (B=0)
@@ -49,9 +49,10 @@ interface IMultiAMM {
         uint _amountB
     ) external;
 
+    function pools(bytes32) external view returns (Pool memory);
+
     function addLiquidityAtZeroPrice(
         address _tokenA,
-        address _tokenB,
         uint _amountA
     ) external returns (Pool memory pool);
 
@@ -78,6 +79,11 @@ interface IMultiAMM {
         external 
         view 
         returns (uint balanceA, uint balanceB, uint K);
+
+    function _getPoolId(address _tokenA, address _tokenB)
+        external
+        view
+        returns (bytes32 poolId);
 
     function getUserShare(address _tokenA, address _tokenB, address _user)
         external

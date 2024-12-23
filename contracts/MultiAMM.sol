@@ -101,7 +101,7 @@ contract MultiAMM {
      * @param tokenA The address of the non-WETH token.
      * @param amountA How many tokenA to deposit.
      */
-    function addLiquidityAtZeroPriceForWETH(address tokenA, uint amountA)
+    function addLiquidityAtZeroPrice(address tokenA, uint amountA)
         external
         returns (Pool memory pool)
     {
@@ -294,7 +294,10 @@ function swapExactTokenBforTokenA(
     Pool storage pool = pools[poolId];
     require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB >= 0, "NO_POOL");
 
-    // 1. Transfer B in
+    // 1. Approve B in
+    require(Token(_tokenB).approve(address(this), _amountBIn), "approve failed");
+
+    // 2. Transfer B in
     require(Token(_tokenB).transferFrom(msg.sender, address(this), _amountBIn), "transferFrom B failed");
 
     if (pool.zeroPriceActive) {
