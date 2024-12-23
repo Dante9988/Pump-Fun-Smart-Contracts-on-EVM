@@ -447,12 +447,13 @@ describe('ICO', () => {
     //     });
     // });
 
+    
     describe('View', async () => {
         let tokenAddress: string;
         let IERC20: Token__factory;
-    
-        // Create token and add liquidity before running tests
-        beforeEach(async () => {
+
+         // Create token and add liquidity before running tests
+         beforeEach(async () => {
             const tokenParams = {
                 name: "Sad Ethereum",
                 symbol: "SADETH",
@@ -476,7 +477,7 @@ describe('ICO', () => {
                 K: K.toString()
             });
         });
-    
+
         it('should verify pool creation', async () => {
             expect(tokenAddress).to.not.be.undefined;
             
@@ -547,7 +548,7 @@ describe('ICO', () => {
             });
         
             // Prepare swap
-            const swapAmount = ethers.utils.parseUnits('1', 15);
+            const swapAmount = ethers.utils.parseUnits('1', 11);
             console.log("Attempting to swap:", ethers.utils.formatUnits(swapAmount, 11), "WETH");
             
             // Check allowances

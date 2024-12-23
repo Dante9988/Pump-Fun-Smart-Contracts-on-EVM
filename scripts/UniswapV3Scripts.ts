@@ -51,7 +51,7 @@ async function main() {
     const mintAmount = 1000000;
 
     console.log(`This is the signer address: ${signer.address}`)
-    const deployedContracts = await deployUniswapV3(signer, tokens(mintAmount));
+    const deployedContracts = await deployUniswapV3(signer as unknown as HardhatEthersSigner, tokens(mintAmount));
     console.log(`======UniswapV3 deployed successfully======\n`);
     console.log(`${JSON.stringify(deployedContracts, null, 2)}\n`);
 
@@ -82,7 +82,7 @@ async function main() {
     // console.log(`Swap Transaction hash: ${tx.hash}\n`);
 }
 
-main();
+// main();
 
 const artifacts = {
     UniswapV3Factory: UniswapV3FactoryABI,

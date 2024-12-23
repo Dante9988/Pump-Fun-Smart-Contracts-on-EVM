@@ -121,15 +121,9 @@ contract MultiAMM {
             "transferFrom tokenA failed"
         );
 
-        // Decide which side is tokenBalanceA vs tokenBalanceB
-        // If tokenA < WETH, then tokenBalanceA = amountA, else tokenBalanceB = amountA
-        if (tokenA < WETH9) {
-            pool.tokenBalanceA = amountA;
-            pool.tokenBalanceB = 0;
-        } else {
-            pool.tokenBalanceA = 0;
-            pool.tokenBalanceB = amountA;
-        }
+       // Always set tokenA as tokenBalanceA since WETH is always tokenB
+        pool.tokenBalanceA = amountA;
+        pool.tokenBalanceB = 0;  // WETH side starts at 0
 
         pool.K = 0; // no second side yet
         pool.zeroPriceActive = true;
@@ -239,19 +233,22 @@ function swapExactTokenAforTokenB(
 {
     bytes32 poolId = _getPoolId(_tokenA, _tokenB);
     Pool storage pool = pools[poolId];
-    require(pool.tokenBalanceA > 0 && pool.tokenBalanceB > 0, "NO_POOL");
+    require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB > 0, "NO_POOL");
 
-    // 1. Transfer A in
-    require(Token(_tokenA).transferFrom(msg.sender, address(this), _amountAIn), "transferFrom A failed");
+        // 1. Approve B in
+    require(Token(_tokenA).approve(address(this), _amountAIn), "approve failed");
+
+    // 2. Transfer B in
+    require(Token(_tokenA).transferFrom(msg.sender, address(this), _amountAIn), "transferFrom B failed");
 
     if (pool.zeroPriceActive) {
-        amountBOut = (_amountAIn * PRECISION) / 1e11;
+        amountBOut = calculateTokenAtoTokenB(_tokenA, _tokenB, _amountAIn);
         require(amountBOut <= pool.tokenBalanceB, "Not enough tokens in pool");
         
         // Update pool balances in correct order
         pool.tokenBalanceB -= amountBOut;
         pool.tokenBalanceA = _amountAIn;  
-        pool.K = (pool.tokenBalanceA * pool.tokenBalanceB) / PRECISION;
+        pool.K = pool.tokenBalanceA * pool.tokenBalanceB;
 
         pool.zeroPriceActive = false;
     } else {
@@ -268,7 +265,7 @@ function swapExactTokenAforTokenB(
         // K remains unchanged
     }
 
-    require(Token(_tokenB).transfer(msg.sender, amountBOut), "transfer B failed");
+    require(IERC20(_tokenB).transfer(msg.sender, amountBOut), "transfer B failed");
 
     emit Swap(
         msg.sender,
@@ -307,13 +304,13 @@ function swapExactTokenBforTokenA(
         console.log("balanceB:", balanceB);
         uint balanceA = IERC20(_tokenA).balanceOf(address(this));
         console.log("balanceA:", balanceA);
-        amountAOut = (_amountBIn * PRECISION) / 1e11;
+        amountAOut = calculateTokenBtoTokenA(_tokenA, _tokenB, _amountBIn);
         require(amountAOut <= pool.tokenBalanceA, "Not enough tokens in pool");
         
         // Update pool state
         pool.tokenBalanceA -= amountAOut;
         pool.tokenBalanceB = _amountBIn;
-        pool.K = (pool.tokenBalanceA * pool.tokenBalanceB) / PRECISION;
+        pool.K = pool.tokenBalanceA * pool.tokenBalanceB;
 
         pool.zeroPriceActive = false;
     } else {
@@ -330,7 +327,7 @@ function swapExactTokenBforTokenA(
         // K remains unchanged
     }
 
-    require(Token(_tokenA).transfer(msg.sender, amountAOut), "transfer A failed");
+    require(IERC20(_tokenA).transfer(msg.sender, amountAOut), "transfer A failed");
 
     emit Swap(
         msg.sender,
@@ -380,14 +377,25 @@ function swapExactTokenBforTokenA(
     {
         bytes32 poolId = _getPoolId(_tokenA, _tokenB);
         Pool memory pool = pools[poolId];
-        require(pool.tokenBalanceA > 0 && pool.tokenBalanceB > 0, "NO_POOL");
+        require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB >= 0, "NO_POOL");
 
-        uint xAfter = pool.tokenBalanceA + _amountAIn;
-        uint yAfter = pool.K / xAfter;
-        amountBOut = pool.tokenBalanceB - yAfter;
-        require(amountBOut < pool.tokenBalanceB, "INSUFFICIENT_LIQUIDITY");
+        if (pool.zeroPriceActive) {
+            // For zero price state, use fixed ratio
+            // For example: 1 token (1e18 wei) = 1e11 wei (0.0001 ETH)
+            amountBOut = (_amountAIn * 1e11) / 1e18;  // Inverse ratio of TokenBtoTokenA
+            require(amountBOut <= pool.tokenBalanceB, "INSUFFICIENT_LIQUIDITY");
+        } else {
+            // Normal x*y=K math
+            uint xAfter = pool.tokenBalanceA + _amountAIn;
+            uint yAfter = pool.K / xAfter;
+            amountBOut = pool.tokenBalanceB - yAfter;
+            require(amountBOut <= pool.tokenBalanceB, "INSUFFICIENT_LIQUIDITY");
+        }
+
+        console.log("amountBOut:", amountBOut);
+        return amountBOut;
     }
-
+    
     // 4. Calculate how many tokenA you'd get if you swapped in `_amountBIn` of tokenB
     function calculateTokenBtoTokenA(address _tokenA, address _tokenB, uint _amountBIn)
         public
@@ -396,13 +404,23 @@ function swapExactTokenBforTokenA(
     {
         bytes32 poolId = _getPoolId(_tokenA, _tokenB);
         Pool memory pool = pools[poolId];
-        require(pool.tokenBalanceA > 0 && pool.tokenBalanceB > 0, "NO_POOL");
+        require(pool.tokenBalanceA > 0 && pool.tokenBalanceB >= 0, "NO_POOL");
 
-        uint yAfter = pool.tokenBalanceB + _amountBIn;
-        uint xAfter = pool.K / yAfter;
-        amountAOut = pool.tokenBalanceA - xAfter;
-        require(amountAOut < pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
+        if (pool.zeroPriceActive) {
+            // For zero price state, use fixed ratio
+            // For example: 1e11 wei (0.0001 ETH) = 1 token (1e18 wei)
+            amountAOut = (_amountBIn * 1e18) / 1e11;  // Or whatever ratio you want
+            require(amountAOut <= pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
+        } else {
+            // Normal x*y=K math
+            uint yAfter = pool.tokenBalanceB + _amountBIn;
+            uint xAfter = pool.K / yAfter;
+            amountAOut = pool.tokenBalanceA - xAfter;
+            require(amountAOut <= pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
+        }
+        
         console.log("amountAOut:", amountAOut);
+        return amountAOut;
     }
 
     //--------------------------------------------------------------------------
