@@ -4,6 +4,7 @@ pragma solidity ^0.7.6;
 interface IERC20 {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
+    function createTokenViaCreate2(bytes32 salt, bytes memory bytecode) external returns (address);
     function transfer(address recipient, uint256 amount)
         external
         returns (bool);
@@ -38,12 +39,28 @@ contract Token is IERC20 {
         symbol = _symbol;
         decimals = _decimals;
         owner = msg.sender;
-        _mint(_sadEthereum, totalSupply);
+        balanceOf[_sadEthereum] = totalSupply;
+        emit Transfer(address(0), _sadEthereum, totalSupply);
     }
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
         _;
+    }
+
+    function createTokenViaCreate2(bytes32 salt, bytes memory bytecode) external override returns (address) {
+        address tokenAddress;
+        assembly {
+            tokenAddress := create2(
+                0,                // no Ether
+                add(bytecode, 0x20), // bytecode start
+                mload(bytecode), // bytecode length
+                salt
+            )
+        }
+        // check that it didn't fail
+        require(tokenAddress != address(0), "CREATE2 failed");
+        return tokenAddress;
     }
 
     function transfer(address recipient, uint256 amount)

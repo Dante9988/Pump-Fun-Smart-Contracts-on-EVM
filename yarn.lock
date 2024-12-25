@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+"@chainlink/contracts@^0.2.1":
+  version "0.2.3"
+  resolved "https://registry.yarnpkg.com/@chainlink/contracts/-/contracts-0.2.3.tgz#f4ef1750caef1682c537a99559b5b95629436303"
+  integrity sha512-hf4b8OEfEqfjC9addvXCrE2SEybNwN1r971vxFYhL/l/yDTTMAk0jmGZYtfUPDOB/qY7FfrOXuxlEVQ+ojZgZw==
+
 "@cspotcode/source-map-support@^0.8.0":
   version "0.8.1"
   resolved "https://registry.yarnpkg.com/@cspotcode/source-map-support/-/source-map-support-0.8.1.tgz#00629c35a688e05a88b1cda684fb9d5e73f000a1"
@@ -649,6 +654,11 @@
   version "3.4.2-solc-0.7"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-3.4.2-solc-0.7.tgz#38f4dbab672631034076ccdf2f3201fab1726635"
   integrity sha512-W6QmqgkADuFcTLzHL8vVoNBtkwjvQRpYIAom7KiUNoLKghyx3FgH0GBjt8NRvigV1ZmMOBllvE1By1C+bi8WpA==
+
+"@pythnetwork/pyth-sdk-solidity@^4.0.0":
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/@pythnetwork/pyth-sdk-solidity/-/pyth-sdk-solidity-4.0.0.tgz#166aeef316bf8ec6c21d97e6e9ba0de96c0fd270"
+  integrity sha512-Cy2MvSN1Oh5YpIYmZd2In6/gfXbGjnpazmXKioTuq07Drp4Rl2XHcvtqHdgilplCl32IG4pU+XoRafpexID08A==
 
 "@scure/base@~1.1.0", "@scure/base@~1.1.6":
   version "1.1.9"

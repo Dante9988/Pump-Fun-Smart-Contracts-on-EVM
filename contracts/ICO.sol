@@ -3,8 +3,10 @@ pragma solidity ^0.7.6;
 pragma abicoder v2;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+//import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import "./libs/PriceLib.sol";
+import "./MockPriceFeed.sol";
 import "hardhat/console.sol";
-import "./Token.sol";
 import "./interfaces/IMultiAMM.sol";
 import "./interfaces/IUniswapV3Pools.sol";
 import "./interfaces/IUniswapV3Factory.sol";
@@ -12,6 +14,8 @@ import "./interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-periphery/contracts/base/Multicall.sol";
 
 contract LiquidityProvider {
+
+    using PriceLib for address;
 
     struct MintPositionParams {
         address tokenA;
@@ -38,10 +42,14 @@ contract LiquidityProvider {
     INonfungiblePositionManager public immutable nonfungiblePositionManager;
     ISwapRouter public immutable swapRouter;
     IMultiAMM public immutable amm;
+    MockPriceFeed public ethUsdPriceFeed;
+    
     address public owner;
     mapping(address => bool) public whitelisted;
     address[] public createdTokens;
     address public WETH9;
+    uint256 public constant MARKET_CAP_THRESHOLD = 100_000 * 1e18; // $100,000 with 18 decimals
+    address public immutable priceLib;
 
     // Token address => owner address
     mapping(address => address[]) public tokenOwners;
@@ -71,7 +79,9 @@ contract LiquidityProvider {
     address _nonfungiblePositionManager, 
     address _swapRouter,
     address _weth9,
-    IMultiAMM _amm
+    IMultiAMM _amm,
+    address _ethUsdPriceFeed,
+    address _priceLib
     ) {
         factory = IUniswapV3Factory(_factory);
         nonfungiblePositionManager = INonfungiblePositionManager(_nonfungiblePositionManager);
@@ -80,6 +90,8 @@ contract LiquidityProvider {
         whitelisted[owner] = true;
         WETH9 = _weth9;
         amm = _amm;
+        ethUsdPriceFeed = MockPriceFeed(_ethUsdPriceFeed);
+        priceLib = _priceLib;
     }
 
     function addWhitelistedUser(address user) external onlyOwner {
@@ -90,12 +102,32 @@ contract LiquidityProvider {
         whitelisted[user] = false;
     }
 
-    function getOwnerShares(address tokenAddress) external view returns (uint256, uint256) {
-        return amm.getUserShare(tokenAddress, WETH9, msg.sender);
+    // function getOwnerShares(address tokenAddress) external view returns (uint256, uint256) {
+    //     return amm.getUserShare(tokenAddress, WETH9, msg.sender);
+    // }
+
+    // function getTokenPrice(address tokenAddress, address tokenB) external view returns (uint256 priceAinB, uint256 priceBinA) {
+    //     return amm.getTokenPrice(tokenAddress, tokenB);
+    // }
+
+    function getTokenPriceInUSD(address tokenAddress) public view returns (uint256) {
+        return PriceLib.getTokenPriceInUSD(
+            tokenAddress,
+            WETH9,
+            amm,
+            AggregatorV3Interface(ethUsdPriceFeed)
+        );
     }
 
-    function getTokenPrice(address tokenAddress, address tokenB) external view returns (uint256 priceAinB, uint256 priceBinA) {
-        return amm.getTokenPrice(tokenAddress, tokenB);
+    function getMarketCapInUSD(address tokenAddress) public view returns (uint256 marketCapInUSD) {
+        marketCapInUSD = PriceLib.getMarketCapInUSD(
+            tokenAddress,
+            WETH9,
+            amm,
+            AggregatorV3Interface(ethUsdPriceFeed)
+        );
+        console.log("Market cap in USD:", marketCapInUSD);
+        return marketCapInUSD;
     }
 
     function createToken(TokenParams calldata params) external returns (address tokenAddress) {
@@ -141,6 +173,22 @@ contract LiquidityProvider {
         require(IERC20(tokenAddress).transfer(msg.sender, amountOut), "Token transfer to user failed");
         return amountOut;
     }
+
+    function sellToken(address tokenAddress, uint256 amount) external returns (uint256 amountOut) {
+        // First, transfer WETH from user to this contract
+        require(IERC20(tokenAddress).transferFrom(msg.sender, address(this), amount), "Token transfer failed");
+    
+        // Then approve AMM to spend the WETH
+        require(IERC20(tokenAddress).approve(address(amm), amount), "Token approval failed");
+        
+        amountOut = amm.swapExactTokenAforTokenB(tokenAddress, WETH9, amount);
+        // 4. Transfer received tokens to the user (THIS WAS MISSING)
+        require(IERC20(WETH9).transfer(msg.sender, amountOut), "WETH transfer to user failed");
+        return amountOut;
+    }
+
+
+    // Uniswap V3 Functions
 
     function createPool(
         address tokenA,
