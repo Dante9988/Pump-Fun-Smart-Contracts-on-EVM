@@ -798,8 +798,8 @@ describe('ICO', () => {
             });
 
             // Prepare swap
-            swapAmount = ethers.utils.parseUnits('1', 13);
-            console.log("Attempting to swap:", ethers.utils.formatUnits(swapAmount, 13), "WETH");
+            swapAmount = ethers.utils.parseUnits('5', 18);
+            console.log("Attempting to swap:", ethers.utils.formatUnits(swapAmount, 18), "WETH");
 
             // Check allowances
             allowanceBefore = await uniswapV3.WETH9.allowance(deployer.address, ico.address);
@@ -923,6 +923,170 @@ describe('ICO', () => {
             console.log('----------------------------------------------------------------')
             console.log('----------------------------------------------------------------')
             console.log('----------------------------------------------------------------')
+
+
+
+
+
+
+
+
+
+
+
+                        // Initial state check
+                        poolId = await multiAMM._getPoolId(tokenAddress, uniswapV3.WETH9.address);
+                        poolBefore = await multiAMM.pools(poolId);
+                        console.log("Pool state before swap:", {
+                            tokenBalanceA: ethers.utils.formatEther(poolBefore.tokenBalanceA),
+                            tokenBalanceB: ethers.utils.formatEther(poolBefore.tokenBalanceB),
+                            K: poolBefore.K.toString(),
+                            zeroPriceActive: poolBefore.zeroPriceActive
+                        });
+            
+                        // Check initial balances
+                        deployerWETHBefore = await uniswapV3.WETH9.balanceOf(deployer.address);
+                        deployerTokenBefore = await IERC20.attach(tokenAddress).balanceOf(deployer.address);
+                        ammWETHBefore = await uniswapV3.WETH9.balanceOf(multiAMM.address);
+                        ammTokenBefore = await IERC20.attach(tokenAddress).balanceOf(multiAMM.address);
+            
+                        console.log("Balances before swap:", {
+                            deployer: {
+                                WETH: ethers.utils.formatEther(deployerWETHBefore),
+                                token: ethers.utils.formatEther(deployerTokenBefore)
+                            },
+                            amm: {
+                                WETH: ethers.utils.formatEther(ammWETHBefore),
+                                token: ethers.utils.formatEther(ammTokenBefore)
+                            }
+                        });
+            
+                        // Prepare swap
+                        swapAmount = ethers.utils.parseUnits('1', 18);
+                        console.log("Attempting to swap:", ethers.utils.formatUnits(swapAmount, 18), "WETH");
+            
+                        // Check allowances
+                        allowanceBefore = await uniswapV3.WETH9.allowance(deployer.address, ico.address);
+                        console.log("ICO allowance before:", ethers.utils.formatEther(allowanceBefore));
+            
+                        // Approve and swap
+                        await uniswapV3.WETH9.connect(deployer as unknown as Signer).approve(ico.address, ethers.utils.parseUnits('100000', 18));
+                        await uniswapV3.WETH9.connect(deployer as unknown as Signer).approve(multiAMM.address, ethers.utils.parseUnits('100000', 18));
+                        allowanceAfter = await uniswapV3.WETH9.allowance(deployer.address, ico.address);
+                        allowanceAfterMultiAMM = await uniswapV3.WETH9.allowance(deployer.address, multiAMM.address);
+                        console.log("ICO allowance after:", ethers.utils.formatEther(allowanceAfter));
+                        console.log("MultiAMM allowance after:", ethers.utils.formatEther(allowanceAfterMultiAMM));
+            
+                        const [balanceA4, balanceB4, K4] = await multiAMM.getPoolBalances(tokenAddress, uniswapV3.WETH9.address);
+                        console.log("\nPool state before swap:");
+                        console.log("Token balance:", ethers.utils.formatEther(balanceA4));
+                        console.log("WETH balance:", ethers.utils.formatEther(balanceB4));
+                        console.log("K:", K4.toString());
+            
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log("Swap amount:", ethers.utils.formatUnits(swapAmount, 18), "WETH");
+                        amountOut = await multiAMM.calculateTokenBtoTokenA(tokenAddress, uniswapV3.WETH9.address, swapAmount);
+                        console.log("Expected tokens out:", ethers.utils.formatUnits(amountOut, 18));
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+                        console.log('????????????????????????????????????????????????????????????????')
+            
+                        transaction = await ico.connect(deployer as unknown as Signer).buyToken(
+                            tokenAddress,
+                            swapAmount
+                        );
+            
+                        receipt = await transaction.wait();
+                        console.log("Swap transaction:", {
+                            hash: transaction.hash,
+                            gasUsed: receipt.gasUsed.toString()
+                        });
+            
+                        // After swap
+                        const [balanceA3, balanceB3, K3] = await multiAMM.getPoolBalances(tokenAddress, uniswapV3.WETH9.address);
+                        console.log("\nPool state after swap:");
+                        console.log("Token balance:", ethers.utils.formatEther(balanceA3));
+                        console.log("WETH balance:", ethers.utils.formatEther(balanceB3));
+                        console.log("K:", K3.toString());
+            
+                        // Check final state
+                        poolAfter = await multiAMM.pools(poolId);
+                        console.log("Pool state after swap:", {
+                            tokenBalanceA: ethers.utils.formatEther(poolAfter.tokenBalanceA),
+                            tokenBalanceB: ethers.utils.formatEther(poolAfter.tokenBalanceB),
+                            K: poolAfter.K.toString(),
+                            zeroPriceActive: poolAfter.zeroPriceActive
+                        });
+            
+                        // Check final balances
+                        deployerWETHAfter = await uniswapV3.WETH9.balanceOf(deployer.address);
+                        deployerTokenAfter = await IERC20.attach(tokenAddress).balanceOf(deployer.address);
+                        ammWETHAfter = await uniswapV3.WETH9.balanceOf(multiAMM.address);
+                        ammTokenAfter = await IERC20.attach(tokenAddress).balanceOf(multiAMM.address);
+            
+                        console.log("Balances after swap:", {
+                            deployer: {
+                                WETH: ethers.utils.formatEther(deployerWETHAfter),
+                                token: ethers.utils.formatEther(deployerTokenAfter),
+                                WETHDiff: ethers.utils.formatEther(deployerWETHAfter.sub(deployerWETHBefore)),
+                                tokenDiff: ethers.utils.formatEther(deployerTokenAfter.sub(deployerTokenBefore))
+                            },
+                            amm: {
+                                WETH: ethers.utils.formatEther(ammWETHAfter),
+                                token: ethers.utils.formatEther(ammTokenAfter),
+                                WETHDiff: ethers.utils.formatEther(ammWETHAfter.sub(ammWETHBefore)),
+                                tokenDiff: ethers.utils.formatEther(ammTokenAfter.sub(ammTokenBefore))
+                            }
+                        });
+            
+                        // Verify expectations
+                        expect(deployerTokenAfter).to.be.gt(deployerTokenBefore, "Should have received tokens");
+                        expect(deployerWETHAfter).to.be.lt(deployerWETHBefore, "Should have spent WETH");
+                        expect(ammWETHAfter).to.be.gt(ammWETHBefore, "AMM should have received WETH");
+                        expect(ammTokenAfter).to.be.lt(ammTokenBefore, "AMM should have sent tokens");
+            
+                        
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+            
+                        const [priceInWeth3, ] = await multiAMM.getTokenPrice(tokenAddress, uniswapV3.WETH9.address);
+                        console.log("Price in WETH:", ethers.utils.formatEther(priceInWeth3));
+            
+                        const [, ethPrice3, , ,] = await mockPriceFeed.latestRoundData();
+                        console.log("ETH price in USD (8 decimals):", ethPrice3.toString());
+            
+                        priceInUSD = await ico.getTokenPriceInUSD(tokenAddress);
+                        console.log("Token price in USD (8 decimals):", priceInUSD.toString());
+                        console.log("Token price in USD:", ethers.utils.formatUnits(priceInUSD, 8));
+            
+                        marketCapInUSD = await ico.getMarketCapInUSD(tokenAddress);
+                        console.log("\nMarket cap check:");
+                        console.log("Market cap in USD (8 decimals):", marketCapInUSD.toString());
+                        console.log("Market cap in USD:", ethers.utils.formatUnits(marketCapInUSD, 8));
+            
+                        // Manual calculation check
+                        totalSupply = await IERC20.attach(tokenAddress).totalSupply();
+                        console.log("Total supply:", ethers.utils.formatUnits(totalSupply, 18));
+                        expectedMarketCap = priceInUSD.mul(totalSupply)
+                        console.log("\nManual calculation:");
+                        console.log("Expected market cap (8 decimals):", ethers.utils.formatUnits(expectedMarketCap, 8));
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
+                        console.log('----------------------------------------------------------------')
         });
 
 
