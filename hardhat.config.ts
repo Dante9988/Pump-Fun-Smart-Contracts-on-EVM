@@ -1,4 +1,5 @@
 import { HardhatUserConfig } from "hardhat/config";
+import "hardhat-contract-sizer";
 import "@nomicfoundation/hardhat-toolbox";
 import dotenv from 'dotenv';
 dotenv.config();
@@ -8,23 +9,24 @@ const config: HardhatUserConfig = {
     compilers: [
       {
         version: "0.7.6",
-      },
-      {
-        version: "0.8.0",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 1000,
+          },
+          metadata: {
+            bytecodeHash: 'none',
+          },
+        },
       },
     ],
-    settings: {
-      evmVersion: 'istanbul',
-      optimizer: {
-        enabled: true,
-        runs: 1_000_000,
-      },
-      metadata: {
-        bytecodeHash: 'none',
-      },
-    },
   },
-  
+  contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: true
+  },
   networks: {
     localhost: {
       url: "http://localhost:8545",

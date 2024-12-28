@@ -52,9 +52,9 @@ contract Token is IERC20 {
         address tokenAddress;
         assembly {
             tokenAddress := create2(
-                0,                // no Ether
-                add(bytecode, 0x20), // bytecode start
-                mload(bytecode), // bytecode length
+                0,              
+                add(bytecode, 0x20),
+                mload(bytecode),
                 salt
             )
         }

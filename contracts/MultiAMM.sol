@@ -3,7 +3,6 @@ pragma solidity ^0.7.6;
 pragma abicoder v2;
 
 import "./Token.sol";
-import "hardhat/console.sol";
 
 contract MultiAMM {
     struct Pool {
@@ -256,7 +255,6 @@ function swapExactTokenAforTokenB(
         // Only switch to normal mode if we still have enough WETH
         if (pool.tokenBalanceB >= MIN_ETH_LIQUIDITY) {
             pool.zeroPriceActive = false;
-            console.log("Switching to normal mode. WETH liquidity:", pool.tokenBalanceB);
         }
     } else {
         // Normal x*y=K math
@@ -318,7 +316,6 @@ function swapExactTokenBforTokenA(
         // Only switch to normal mode if we have enough ETH liquidity
         if (pool.tokenBalanceB >= MIN_ETH_LIQUIDITY) {
             pool.zeroPriceActive = false;
-            console.log("Switching to normal mode. ETH liquidity:", pool.tokenBalanceB);
         }
     } else {
         // Normal x*y=K math with PRECISION scaling
@@ -327,7 +324,6 @@ function swapExactTokenBforTokenA(
         // Calculate output amount with slippage limit (e.g., max 10% price impact)
         amountAOut = pool.tokenBalanceA - newBalanceA;
         uint priceImpact = (amountAOut * 1e18) / pool.tokenBalanceA;
-        console.log("priceImpact:", priceImpact);
         
         require(amountAOut <= pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
 
@@ -402,7 +398,6 @@ function swapExactTokenBforTokenA(
             require(amountBOut <= pool.tokenBalanceB, "INSUFFICIENT_LIQUIDITY");
         }
 
-        console.log("amountBOut:", amountBOut);
         return amountBOut;
     }
     
@@ -429,7 +424,6 @@ function swapExactTokenBforTokenA(
             require(amountAOut <= pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
         }
         
-        console.log("amountAOut:", amountAOut);
         return amountAOut;
     }
 

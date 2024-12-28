@@ -63,9 +63,9 @@ describe('ICO', () => {
         uniswapV3 = await deployUniswapV3(deployer, ethers.utils.parseUnits('1000000000', 18));
 
         // Deploy PriceLib first
-        const PriceLib = await ethers.getContractFactory("PriceLib");
-        const priceLib = await PriceLib.deploy();
-        await priceLib.deployed();
+        // const PriceLib = await ethers.getContractFactory("PriceLib");
+        // const priceLib = await PriceLib.deploy();
+        // await priceLib.deployed();
 
         // Deploy our mock price feed with initial ETH price of $3400 (with 8 decimals)
         const MockPriceFeed = await ethers.getContractFactory('MockPriceFeed');
@@ -80,15 +80,14 @@ describe('ICO', () => {
         console.log(`MultiAMM deployed at: ${multiAMM.address}`);
 
         // Deploy LiquidityProvider
-        const LiquidityProvider = await ethers.getContractFactory('LiquidityProvider');
+        const LiquidityProvider = await ethers.getContractFactory('ICO');
         liquidityProvider = await LiquidityProvider.deploy(
             uniswapV3.V3Factory.address, 
             uniswapV3.NFTManager.address, 
             uniswapV3.SwapRouter.address,
             uniswapV3.WETH9.address,
             multiAMM.address,
-            mockPriceFeed.address,
-            priceLib.address
+            mockPriceFeed.address
         );
         ico = await liquidityProvider.deployed();
 
@@ -331,7 +330,6 @@ describe('ICO', () => {
     });
 
     describe('Failure', async () => {
-
         it('should fail with non whitelisted user', async () => {
             const currentBlockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
             const deadline = Math.floor(currentBlockTimestamp) + 60 * 20;
@@ -753,23 +751,6 @@ describe('ICO', () => {
                 zeroPriceActive: poolAfter.zeroPriceActive
             });
 
-            // priceInUSD = await ico.getTokenPriceInUSD(tokenAddress);
-            // console.log("Token price in USD:", ethers.utils.formatUnits(priceInUSD, 8));
-
-            // marketCapInUSD = await ico.getMarketCapInUSD(tokenAddress);
-            // console.log("Market cap in USD:", ethers.utils.formatUnits(marketCapInUSD, 8));
-
-
-
-
-
-
-
-
-
-
-
-
             // Initial state check
             poolId = await multiAMM._getPoolId(tokenAddress, uniswapV3.WETH9.address);
             poolBefore = await multiAMM.pools(poolId);
@@ -886,7 +867,6 @@ describe('ICO', () => {
             expect(deployerWETHAfter).to.be.lt(deployerWETHBefore, "Should have spent WETH");
             expect(ammWETHAfter).to.be.gt(ammWETHBefore, "AMM should have received WETH");
             expect(ammTokenAfter).to.be.lt(ammTokenBefore, "AMM should have sent tokens");
-
             
             console.log('----------------------------------------------------------------')
             console.log('----------------------------------------------------------------')
