@@ -1011,19 +1011,105 @@ describe('ICO', () => {
                     tokenDiff: ethers.utils.formatEther(ammTokenAfter.sub(ammTokenBefore))
                 }
             });
-
-
-            let uniswapPool = await uniswapV3.V3Factory.getPool(tokenAddress, uniswapV3.WETH9.address, 10000);
+            // Get Uniswap V3 pool
+            let uniswapPool = await uniswapV3.V3Factory.getPool(
+                tokenAddress, 
+                uniswapV3.WETH9.address, 
+                10000
+            );
             console.log("Uniswap pool:", uniswapPool);
-            let poolContract = await getPoolInfo(uniswapPool, deployer as unknown as Signer);
+            
+            let poolContract = await getPoolInfo(
+                uniswapPool, 
+                deployer as unknown as Signer
+            );
 
+            // Get price data from pool
+            let slot0 = await poolContract.slot0();
+            let sqrtPriceX96 = slot0[0];
+            let tickCurrent = slot0[1];
+            // Calculate price correctly
+            let sqrtRatio = Number(sqrtPriceX96) / Number(2n ** 96n);
+            let price = (sqrtRatio * sqrtRatio) / 1e18;  // Divide by PRECISION to match MultiAMM
+
+            // Get token ordering
+            let token0 = await poolContract.token0();
+            let token1 = await poolContract.token1();
+
+            // Calculate price in WETH based on token ordering
+            let priceInWETH = token0 < token1 ? price : 1/price;
+            console.log('Raw price in WETH:', priceInWETH.toFixed(18));
+
+            // Get ETH/USD price from price feed (340000000000 = $3,400 with 8 decimals)
+            const [, ethPriceUSD, , ,] = await mockPriceFeed.latestRoundData();
+            let ethPriceInUSD = Number(ethPriceUSD) / 1e8; // Convert from 8 decimals
+
+            // Calculate token price in USD
+            priceInUSD = priceInWETH * ethPriceInUSD;
+
+            // Calculate market cap
+            totalSupply = await IERC20.attach(tokenAddress).totalSupply();
+            let marketCapUSD = priceInUSD * Number(ethers.utils.formatEther(totalSupply));
+
+            console.log('=== Uniswap V3 Pool Analysis ===');
+            console.log('sqrtPriceX96:', sqrtPriceX96.toString());
+            console.log('Current tick:', tickCurrent);
+            console.log('Price in WETH:', priceInWETH.toFixed(18));
+            console.log('ETH Price in USD:', ethPriceInUSD);
+            console.log('Token Price in USD:', priceInUSD.toFixed(18));
+            console.log('Total Supply:', ethers.utils.formatEther(totalSupply));
+            console.log('Market Cap in USD:', marketCapUSD.toFixed(2));
+            console.log('==============================');
 
             let addresses: Addresses = {
                 token1: uniswapV3.WETH9.address,
                 token2: tokenAddress
             }
 
-            await swap(deployer as unknown as HardhatEthersSigner, addresses, uniswapPool, "1");
+            await swap(deployer as unknown as HardhatEthersSigner, addresses, uniswapPool, "0.01", true);
+
+
+            poolContract = await getPoolInfo(
+                uniswapPool, 
+                deployer as unknown as Signer
+            );
+
+            // Get price data from pool
+            slot0 = await poolContract.slot0();
+            sqrtPriceX96 = slot0[0];
+            tickCurrent = slot0[1];
+            // Calculate price correctly
+            sqrtRatio = Number(sqrtPriceX96) / Number(2n ** 96n);
+            price = (sqrtRatio * sqrtRatio) / 1e18;  // Divide by PRECISION to match MultiAMM
+
+            // Get token ordering
+            token0 = await poolContract.token0();
+            token1 = await poolContract.token1();
+
+            // Calculate price in WETH based on token ordering
+            priceInWETH = token0 < token1 ? price : 1/price;
+            console.log('Raw price in WETH:', priceInWETH.toFixed(18));
+
+            // Get ETH/USD price from price feed (340000000000 = $3,400 with 8 decimals)
+            const [, ethPriceUSD2, , ,] = await mockPriceFeed.latestRoundData();
+            ethPriceInUSD = Number(ethPriceUSD2) / 1e8; // Convert from 8 decimals
+
+            // Calculate token price in USD
+            priceInUSD = priceInWETH * ethPriceInUSD;
+
+            // Calculate market cap
+            totalSupply = await IERC20.attach(tokenAddress).totalSupply();
+            marketCapUSD = priceInUSD * Number(ethers.utils.formatEther(totalSupply));
+
+            console.log('=== Uniswap V3 Pool Analysis ===');
+            console.log('sqrtPriceX96:', sqrtPriceX96.toString());
+            console.log('Current tick:', tickCurrent);
+            console.log('Price in WETH:', priceInWETH.toFixed(18));
+            console.log('ETH Price in USD:', ethPriceInUSD);
+            console.log('Token Price in USD:', priceInUSD.toFixed(18));
+            console.log('Total Supply:', ethers.utils.formatEther(totalSupply));
+            console.log('Market Cap in USD:', marketCapUSD.toFixed(2));
+            console.log('==============================');
             
         });
 
@@ -1063,6 +1149,9 @@ const getPoolInfo = async (poolAddress: string, signer: Signer): Promise<Contrac
     const sqrtPriceX96: bigint = slot0[0];
     const tickCurrent: number = slot0[1];
 
+    // Calculate price from sqrtPriceX96
+    const price = (Number(sqrtPriceX96) * Number(sqrtPriceX96) * (10 ** -18)) / (2 ** 192);
+
     console.log('Pool Token0:', token0);
     console.log('Pool Token1:', token1);
     console.log('Fee:', fee);
@@ -1070,6 +1159,9 @@ const getPoolInfo = async (poolAddress: string, signer: Signer): Promise<Contrac
     console.log('Liquidity:', liquidity.toString());
     console.log('Current sqrtPriceX96:', sqrtPriceX96.toString());
     console.log('Current tick:', tickCurrent);
+     console.log('===============================================');
+    console.log('Price (token1/token0):', price.toFixed(18));
+    console.log('Price (token0/token1):', (1/price).toFixed(18));
     console.log('===============================================');
 
     return poolContract;

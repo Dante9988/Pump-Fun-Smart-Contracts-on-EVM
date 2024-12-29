@@ -85,6 +85,8 @@ abstract contract LiquidityManager is ILiquidityManager {
             ? (tokenA, tokenB) 
             : (tokenB, tokenA);
 
+        console.log("SqrtPriceX96 from createPool:", sqrtPriceX96);
+
         if (factory.getPool(tokenA, tokenB, fee) == address(0)) {
             poolAddress = nonfungiblePositionManager.createAndInitializePoolIfNecessary(
                 token0,

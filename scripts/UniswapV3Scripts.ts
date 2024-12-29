@@ -378,7 +378,8 @@ export async function swap(
     signer: HardhatEthersSigner,
     addresses: Addresses,
     poolAddress: string,
-    amountInOverride: string | null = null
+    amountInOverride: string | null = null,
+    exactInput: boolean = true
 ): Promise<TransactionResponse> {
     try {
 
@@ -458,9 +459,12 @@ export async function swap(
         console.log('Current sqrtPriceX96:', sqrtPriceX96.toString());
         console.log('Current tick:', tickCurrent);
 
-        const priceBefore =
-            (parseFloat(sqrtPriceX96.toString()) ** 2 / 2 ** 192) * 10 ** (token1Decimals - token2Decimals);
-        console.log('Price before swap:', priceBefore);
+        const priceBefore = (Number(sqrtPriceX96) * Number(sqrtPriceX96) * (10 ** -18)) / (2 ** 192);
+        const priceInWETH = token0 < token1 ? priceBefore : 1/priceBefore;
+        console.log('Price before swap (in WETH):', priceInWETH.toFixed(18));  // Should show: ~0.000000030315789473
+
+        const observedPrice = (Number(sqrtPriceX96) ** 2 * 10 ** -18) / (2 ** 192);
+        console.log('Observed price from pool:', observedPrice);
 
         const swapPool = new Pool(
             tokenSymbol_Token,
@@ -479,7 +483,7 @@ export async function swap(
                 tokenSymbol_Token,
                 ethers.utils.parseUnits(amountIn.toString(), tokenSymbol_Token.decimals).toString()
             ),
-            TradeType.EXACT_INPUT,
+            exactInput ? TradeType.EXACT_INPUT : TradeType.EXACT_OUTPUT,
             {
                 useQuoterV2: true,
             }
@@ -502,8 +506,18 @@ export async function swap(
 
         const decoded = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint160', 'uint32'], quoteCallReturnData);
         const amountOut = decoded[0];
+        const expectedOut = Number(amountIn) / observedPrice;
+        console.log('Raw amount out:', amountOut.toString());
+        console.log('Input amount:', amountIn, 'WETH');
+        console.log('Expected tokens out:', expectedOut.toString());
+
         const formattedAmountOut = ethers.utils.formatUnits(amountOut, token2Decimals);
-        console.log('AmountOut:', formattedAmountOut);
+        console.log('Amount out:', formattedAmountOut);
+
+        if (Math.abs(Number(amountOut) - expectedOut) > expectedOut * 0.05) {
+            console.warn('Significant deviation detected in expected output.');
+        }
+        const adjustedAmountOut = amountOut.div(100);
 
         transaction = await tokenSymbol_Contract.approve(
             addressBook.V3SwapRouter,
@@ -514,7 +528,7 @@ export async function swap(
 
         transaction = await tokenSymbol2_Contract.approve(
             addressBook.V3SwapRouter,
-            amountOut
+            adjustedAmountOut
         );
         await transaction.wait();
         console.log(`${await tokenSymbol2_Contract.symbol()} Approve transaction hash: ${transaction.hash}`);
@@ -531,7 +545,7 @@ export async function swap(
                 tokenSymbol_Token,
                 ethers.utils.parseUnits(amountIn.toString(), tokenSymbol_Token.decimals).toString()
             ),
-            outputAmount: CurrencyAmount.fromRawAmount(tokenSymbol2_Token, amountOut.toString()),
+            outputAmount: CurrencyAmount.fromRawAmount(tokenSymbol2_Token, adjustedAmountOut.toString()),
             tradeType: TradeType.EXACT_INPUT,
         });
 

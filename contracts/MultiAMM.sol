@@ -449,7 +449,6 @@ function swapExactTokenBforTokenA(
     {
         bytes32 poolId = _getPoolId(_tokenA, _tokenB);
         Pool memory pool = pools[poolId];
-        //require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB >= 0, "NO_POOL");
         
         if (pool.zeroPriceActive) {
             // Initial fixed price

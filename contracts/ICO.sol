@@ -102,112 +102,43 @@ contract ICO is LiquidityManager {
         console.log("Market cap from contract:", marketCap);
         console.log("Market cap threshold:", MARKET_CAP_THRESHOLD);
         // Check if the market cap is above the threshold
-        // if (marketCap >= MARKET_CAP_THRESHOLD) {
-        //     console.log("Market cap is above threshold, withdrawing liquidity");
+        if (marketCap >= MARKET_CAP_THRESHOLD) {
+            console.log("Market cap is above threshold, withdrawing liquidity");
 
+            (uint256 priceTokenInWETH, uint256 priceWETHInToken) = amm.getTokenPrice(tokenAddress, WETH9);
+            console.log("Price in WETH:", priceTokenInWETH);
+            console.log("Price in token:", priceWETHInToken);
 
-        //     // Get current price from AMM
-        //     (uint256 priceTokenInWETH, ) = amm.getTokenPrice(tokenAddress, WETH9);
-        //     uint160 sqrtPriceX96 = uint160(sqrt((priceTokenInWETH * (1 << 192)) / PRECISION));
+            uint160 sqrtPriceX96 = calculateSqrtPriceX96(priceTokenInWETH);
+            console.log("Final sqrtPriceX96:", sqrtPriceX96);
 
-        //     // Withdraw liquidity from AMM
-        //     (uint share, ) = amm.getUserShare(tokenAddress, WETH9, address(this));
-        //     console.log("Share:", share);
-        //     (uint amountAOut, uint amountBOut) = amm.removeLiquidity(tokenAddress, WETH9, share);
-        //     console.log("Amount A out from removeLiquidity:", amountAOut);
-        //     console.log("Amount B out from removeLiquidity:", amountBOut);
+            // Withdraw liquidity from AMM
+            (uint share, ) = amm.getUserShare(tokenAddress, WETH9, address(this));
+            (uint amountAOut, uint amountBOut) = amm.removeLiquidity(tokenAddress, WETH9, share);
+
+            // Approve tokens for NFT manager
+            IERC20(tokenAddress).approve(address(nonfungiblePositionManager), amountAOut);
+            IERC20(WETH9).approve(address(nonfungiblePositionManager), amountBOut);
             
-        //     uint24 fee = 10000; // 1% fee
+            MintPositionParams memory mintParams = MintPositionParams({
+                tokenA: tokenAddress,
+                tokenB: WETH9,
+                fee: 10000, // 1% fee
+                tickLower: -887200,
+                tickUpper: 887200,
+                amountA: amountAOut,
+                amountB: amountBOut,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: msg.sender,
+                deadline: block.timestamp + 1000,
+                sqrtPriceX96: sqrtPriceX96
+            });
             
-        //     // Calculate ticks for full range
-        //     int24 tickLower = -887272; // Min tick for full range
-        //     int24 tickUpper = 887272;  // Max tick for full range
-
-        //     MintPositionParams memory mintParams = MintPositionParams({
-        //         tokenA: tokenAddress,
-        //         tokenB: WETH9,
-        //         fee: fee, // 0.1%
-        //         tickLower: tickLower,
-        //         tickUpper: tickUpper,
-        //         amountA: amountAOut,
-        //         amountB: amountBOut,
-        //         amount0Min: 0,
-        //         amount1Min: 0,
-        //         recipient: msg.sender,
-        //         deadline: block.timestamp + 1000,
-        //         sqrtPriceX96: sqrtPriceX96
-        //     });
-            
-        //     (address poolAddress, uint256 tokenId) = this.bundleLiquidity(mintParams);
-        //     console.log("Pool address:", poolAddress);
-        //     console.log("Token ID:", tokenId);
-        // }
-    if (marketCap >= MARKET_CAP_THRESHOLD) {
-        console.log("Market cap is above threshold, withdrawing liquidity");
-
-        // Get current price from AMM
-        (uint256 priceTokenInWETH, ) = amm.getTokenPrice(tokenAddress, WETH9);
-        console.log("Price in WETH:", priceTokenInWETH);
-        uint160 sqrtPriceX96 = uint160(sqrt((priceTokenInWETH * (1 << 192)) / PRECISION));
-        console.log("sqrtPriceX96:", sqrtPriceX96);
-
-        // Withdraw liquidity from AMM
-        (uint share, ) = amm.getUserShare(tokenAddress, WETH9, address(this));
-        console.log("Share:", share);
-        (uint amountAOut, uint amountBOut) = amm.removeLiquidity(tokenAddress, WETH9, share);
-        console.log("Amount A out:", amountAOut);
-        console.log("Amount B out:", amountBOut);
-
-        // Check balances before creating pool
-        uint256 balanceA = IERC20(tokenAddress).balanceOf(address(this));
-        uint256 balanceB = IERC20(WETH9).balanceOf(address(this));
-        console.log("ICO contract balances before pool creation:");
-        console.log("Token balance:", balanceA);
-        console.log("WETH balance:", balanceB);
-
-        // Approve tokens for NFT manager
-        IERC20(tokenAddress).approve(address(nonfungiblePositionManager), amountAOut);
-        IERC20(WETH9).approve(address(nonfungiblePositionManager), amountBOut);
-        
-        MintPositionParams memory mintParams = MintPositionParams({
-            tokenA: tokenAddress,
-            tokenB: WETH9,
-            fee: 10000, // 1% fee
-            tickLower: -887200,
-            tickUpper: 887200,
-            amountA: amountAOut,
-            amountB: amountBOut,
-            amount0Min: 0,
-            amount1Min: 0,
-            recipient: msg.sender,
-            deadline: block.timestamp + 1000,
-            sqrtPriceX96: sqrtPriceX96
-        });
-
-        // Add debug logs for pool creation
-        console.log("Creating pool with params:");
-        console.log("Sqrt Price X96:", sqrtPriceX96);
-        console.log("Token A:", tokenAddress);
-        console.log("Token B:", WETH9);
-        console.log("Fee:", mintParams.fee);
-        console.log("Amount A:", amountAOut);
-        console.log("Amount B:", amountBOut);
-        
-        (address poolAddress, uint256 tokenId) = this.bundleLiquidity(mintParams);
-        console.log("Pool address:", poolAddress);
-        console.log("Token ID:", tokenId);
-    }
+            this.bundleLiquidity(mintParams);
+        }
 
         return amountOut;
-    }
-
-    function sqrt(uint256 x) internal pure returns (uint256 y) {
-    uint256 z = (x + 1) / 2;
-    y = x;
-    while (z < y) {
-        y = z;
-            z = (x / z + z) / 2;
-        }
     }
 
     function sellToken(address tokenAddress, uint256 amount) external returns (uint256 amountOut) {
@@ -221,6 +152,27 @@ contract ICO is LiquidityManager {
         // 4. Transfer received tokens to the user (THIS WAS MISSING)
         require(IERC20(WETH9).transfer(msg.sender, amountOut), "WETH transfer to user failed");
         return amountOut;
+    }
+
+    // Internal functions
+
+    function sqrt(uint256 x) internal pure returns (uint256 y) {
+        uint256 z = (x + 1) / 2;
+        y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+    }
+
+    function calculateSqrtPriceX96(uint priceAinB) internal pure returns (uint160 sqrtPriceX96) {
+        require(priceAinB > 0, "Price must be positive");
+
+        // Calculate sqrtPriceX96 directly from priceAinB
+        uint256 ratioTimes2_192 = priceAinB * (1 << 192); // Multiply by 2^192
+        uint256 sqrtRatio = sqrt(ratioTimes2_192);        // Take the square root
+
+        sqrtPriceX96 = uint160(sqrtRatio);
     }
 
 
