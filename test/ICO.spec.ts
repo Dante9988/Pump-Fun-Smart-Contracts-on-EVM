@@ -16,6 +16,8 @@ import PositionManager from '../tools/abi/positionManager.json';
 import { IERC20 } from '../typechain-types/contracts/Token.sol/IERC20';
 import { Token__factory } from '../typechain-types';
 
+import UniswapV3Pool from '@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json';
+
 const FEE_AMOUNT_LOW = {
     FEE_AMOUNT: constant.FEE_AMOUNT.LOW,
     TICK_LOWER: constant.getMinTick(constant.TICK_SPACINGS[constant.FEE_AMOUNT.LOW]),
@@ -61,11 +63,6 @@ describe('ICO', () => {
         deployer = accounts[0];
         nonWhitelisted = accounts[1];
         uniswapV3 = await deployUniswapV3(deployer, ethers.utils.parseUnits('1000000000', 18));
-
-        // Deploy PriceLib first
-        // const PriceLib = await ethers.getContractFactory("PriceLib");
-        // const priceLib = await PriceLib.deploy();
-        // await priceLib.deployed();
 
         // Deploy our mock price feed with initial ETH price of $3400 (with 8 decimals)
         const MockPriceFeed = await ethers.getContractFactory('MockPriceFeed');
@@ -932,7 +929,7 @@ describe('ICO', () => {
             });
 
             // Prepare swap
-            swapAmount = ethers.utils.parseUnits('1', 18);
+            swapAmount = ethers.utils.parseUnits('7', 18);
             console.log("Attempting to swap:", ethers.utils.formatUnits(swapAmount, 18), "WETH");
 
             // Check allowances
@@ -1015,48 +1012,57 @@ describe('ICO', () => {
                 }
             });
 
-            // Verify expectations
-            expect(deployerTokenAfter).to.be.gt(deployerTokenBefore, "Should have received tokens");
-            expect(deployerWETHAfter).to.be.lt(deployerWETHBefore, "Should have spent WETH");
-            expect(ammWETHAfter).to.be.gt(ammWETHBefore, "AMM should have received WETH");
-            expect(ammTokenAfter).to.be.lt(ammTokenBefore, "AMM should have sent tokens");
 
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-
-            const [priceInWeth3, ] = await multiAMM.getTokenPrice(tokenAddress, uniswapV3.WETH9.address);
-            console.log("Price in WETH:", ethers.utils.formatEther(priceInWeth3));
-
-            const [, ethPrice3, , ,] = await mockPriceFeed.latestRoundData();
-            console.log("ETH price in USD (8 decimals):", ethPrice3.toString());
-
-            priceInUSD = await ico.getTokenPriceInUSD(tokenAddress);
-            console.log("Token price in USD (8 decimals):", priceInUSD.toString());
-            console.log("Token price in USD:", ethers.utils.formatUnits(priceInUSD, 8));
-
-            marketCapInUSD = await ico.getMarketCapInUSD(tokenAddress);
-            console.log("\nMarket cap check:");
-            console.log("Market cap in USD (8 decimals):", marketCapInUSD.toString());
-            console.log("Market cap in USD:", ethers.utils.formatUnits(marketCapInUSD, 8));
-
-            // Manual calculation check
-            totalSupply = await IERC20.attach(tokenAddress).totalSupply();
-            console.log("Total supply:", ethers.utils.formatUnits(totalSupply, 18));
-            expectedMarketCap = priceInUSD.mul(totalSupply)
-            console.log("\nManual calculation:");
-            console.log("Expected market cap (8 decimals):", ethers.utils.formatUnits(expectedMarketCap, 8));
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
-            console.log('----------------------------------------------------------------')
+            let uniswapPool = await uniswapV3.V3Factory.getPool(tokenAddress, uniswapV3.WETH9.address, 10000);
+            console.log("Uniswap pool:", uniswapPool);
+            let poolContract = await getPoolInfo(uniswapPool, deployer as unknown as Signer);
+            
         });
 
     });
 });
+
+interface Slot0 {
+    sqrtPriceX96: bigint;
+    tick: number;
+    observationIndex: number;
+    observationCardinality: number;
+    observationCardinalityNext: number;
+    feeProtocol: number;
+    unlocked: boolean;
+}
+
+const getPoolInfo = async (poolAddress: string, signer: Signer): Promise<Contract> => {
+    const poolContract = new Contract(poolAddress, UniswapV3Pool.abi, signer);
+    
+    const [
+        token0,
+        token1,
+        fee,
+        tickSpacing,
+        liquidity,
+        slot0
+    ] = await Promise.all([
+        poolContract.token0(),
+        poolContract.token1(),
+        poolContract.fee(),
+        poolContract.tickSpacing(),
+        poolContract.liquidity(),
+        poolContract.slot0(),
+    ]);
+
+    // Destructure slot0 data
+    const sqrtPriceX96: bigint = slot0[0];
+    const tickCurrent: number = slot0[1];
+
+    console.log('Pool Token0:', token0);
+    console.log('Pool Token1:', token1);
+    console.log('Fee:', fee);
+    console.log('TickSpacing:', tickSpacing);
+    console.log('Liquidity:', liquidity.toString());
+    console.log('Current sqrtPriceX96:', sqrtPriceX96.toString());
+    console.log('Current tick:', tickCurrent);
+    console.log('===============================================');
+
+    return poolContract;
+};

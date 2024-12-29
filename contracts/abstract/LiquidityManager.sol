@@ -9,6 +9,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "../interfaces/IMultiAMM.sol";
 import "../libs/PriceLib.sol"; 
 import "../interfaces/ILiquidityManager.sol";
+import "hardhat/console.sol";
 
 abstract contract LiquidityManager is ILiquidityManager {
     using PriceLib for address;
@@ -36,7 +37,8 @@ abstract contract LiquidityManager is ILiquidityManager {
         address _nonfungiblePositionManager,
         address _swapRouter,
         address _weth9,
-        IMultiAMM _amm 
+        IMultiAMM _amm,
+        address _ico
     ) {
         factory = IUniswapV3Factory(_factory);
         nonfungiblePositionManager = INonfungiblePositionManager(_nonfungiblePositionManager);
@@ -45,6 +47,7 @@ abstract contract LiquidityManager is ILiquidityManager {
         amm = _amm;
         owner = msg.sender;
         whitelisted[owner] = true;
+        whitelisted[_ico] = true;
     }
 
     function getOwnerShares(address tokenAddress) external view override returns (uint256, uint256) {
@@ -76,12 +79,16 @@ abstract contract LiquidityManager is ILiquidityManager {
         require(tokenA != tokenB, "Identical addresses");
         require(amountA > 0 && amountB > 0, "Amounts must be greater than 0");
         require(tokenA != address(0) && tokenB != address(0), "Invalid token addresses");
-        require(tokenA < tokenB);
+
+        // Sort tokens for pool creation
+        (address token0, address token1) = tokenA < tokenB 
+            ? (tokenA, tokenB) 
+            : (tokenB, tokenA);
 
         if (factory.getPool(tokenA, tokenB, fee) == address(0)) {
             poolAddress = nonfungiblePositionManager.createAndInitializePoolIfNecessary(
-                tokenA,
-                tokenB,
+                token0,
+                token1,
                 fee,
                 sqrtPriceX96
             );
@@ -134,6 +141,17 @@ abstract contract LiquidityManager is ILiquidityManager {
             recipient: params.recipient,
             deadline: params.deadline
         });
+        console.log("token0:", token0);
+        console.log("token1:", token1);
+        console.log("fee:", params.fee);
+        //console.log("tickLower:", params.tickLower);
+        //console.log("tickUpper:", params.tickUpper);
+        console.log("amount0Desired:", amount0Desired);
+        console.log("amount1Desired:", amount1Desired);
+        console.log("amount0Min:", params.amount0Min);
+        console.log("amount1Min:", params.amount1Min);
+        console.log("recipient:", params.recipient);
+        console.log("deadline:", params.deadline);
 
         (tokenId, , , ) = nonfungiblePositionManager.mint(mintParams);
         require(tokenId != 0, "Minting position failed");
@@ -160,6 +178,7 @@ abstract contract LiquidityManager is ILiquidityManager {
             params.sqrtPriceX96
         );
         require(poolAddress != address(0), "Pool creation failed");
+        console.log("Pool address from bundleLiquidity:", poolAddress);
         
         tokenId = mintPosition(params);
         require(tokenId != 0, "Minting position failed");

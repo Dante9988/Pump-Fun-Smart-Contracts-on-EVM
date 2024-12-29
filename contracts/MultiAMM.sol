@@ -449,13 +449,14 @@ function swapExactTokenBforTokenA(
     {
         bytes32 poolId = _getPoolId(_tokenA, _tokenB);
         Pool memory pool = pools[poolId];
-        require(pool.tokenBalanceA > 0 && pool.tokenBalanceB > 0, "NO_POOL");
+        //require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB >= 0, "NO_POOL");
         
         if (pool.zeroPriceActive) {
             // Initial fixed price
-            priceAinB = 1e11;  // 0.0001 ETH per token
-            priceBinA = 1e18 / 1e11;  // Inverse
+            priceAinB = 1e11;  
+            priceBinA = 1e18 / 1e11;
         } else {
+            require(pool.tokenBalanceA > 0 && pool.tokenBalanceB > 0, "Cannot calculate price with zero balance");
             // Use spot price from current pool balances
             priceAinB = (pool.tokenBalanceB * PRECISION) / pool.tokenBalanceA;
             priceBinA = (pool.tokenBalanceA * PRECISION) / pool.tokenBalanceB;

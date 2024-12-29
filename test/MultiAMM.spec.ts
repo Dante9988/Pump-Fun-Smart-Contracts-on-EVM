@@ -78,6 +78,37 @@ describe("MultiPairAMM", function () {
       expect(totalShares).to.equal(share);
     });
 
+    it("Should handle remove liquidity correctly", async function () {
+      const amountA = ethers.utils.parseEther("10");
+      const amountB = ethers.utils.parseEther("20");
+
+      await amm.addLiquidity(tokenA.address, tokenB.address, amountA, amountB);
+
+      const [balA, balB, K]: [BigNumber, BigNumber, BigNumber] = 
+        await amm.getPoolBalances(tokenA.address, tokenB.address);
+
+      expect(balA).to.equal(amountA);
+      expect(balB).to.equal(amountB);
+      expect(K).to.equal(amountA.mul(amountB));
+
+      const [share, totalShares]: [BigNumber, BigNumber] = 
+        await amm.getUserShare(tokenA.address, tokenB.address, owner.address);
+
+      // Initial share = 100
+      expect(share).to.equal(ethers.utils.parseEther("100"));
+      expect(totalShares).to.equal(share);
+      
+      // Remove liquidity
+      await amm.removeLiquidity(tokenA.address, tokenB.address, share);
+
+      const [balA2, balB2, K2]: [BigNumber, BigNumber, BigNumber] = 
+      await amm.getPoolBalances(tokenA.address, tokenB.address);
+
+      expect(balA2).to.equal(BigNumber.from("0"));
+      expect(balB2).to.equal(BigNumber.from("0"));
+      expect(K2).to.equal(BigNumber.from("0"));
+    })
+
     it("Should add subsequent liquidity proportionally", async function () {
       // Initial liquidity
       await amm.addLiquidity(

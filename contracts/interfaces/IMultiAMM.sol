@@ -3,6 +3,8 @@ pragma solidity ^0.7.6;
 pragma abicoder v2;
 
 interface IMultiAMM {
+    
+    // Pool data
     struct Pool {
         uint tokenBalanceA;
         uint tokenBalanceB; 

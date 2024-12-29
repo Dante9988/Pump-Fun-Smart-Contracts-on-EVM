@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.6;
+pragma abicoder v2;
 
 import "@chainlink/contracts/src/v0.7/interfaces/AggregatorV3Interface.sol";
 import "../interfaces/IMultiAMM.sol";
@@ -7,7 +8,7 @@ import "../Token.sol";
 import "hardhat/console.sol";
 
 library PriceLib {
-    
+
     function getTokenPriceInUSD(
         address tokenAddress,
         address WETH9,
@@ -17,6 +18,12 @@ library PriceLib {
         // Get token price in WETH (18 decimals)
         (uint256 priceInWeth, ) = amm.getTokenPrice(tokenAddress, WETH9);
         console.log("Price in WETH from AMM:", priceInWeth);
+
+        bytes32 poolId = amm._getPoolId(tokenAddress, WETH9);
+        // If zeroPriceActive is true, return 0
+        if (amm.pools(poolId).zeroPriceActive) {
+            return 0;
+        }
 
         // Get ETH price in USD (8 decimals)
         (, int256 ethUsdPrice, , , ) = priceFeed.latestRoundData();

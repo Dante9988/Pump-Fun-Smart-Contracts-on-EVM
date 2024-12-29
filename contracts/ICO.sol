@@ -13,6 +13,7 @@ import "@uniswap/v3-periphery/contracts/base/Multicall.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "./abstract/LiquidityManager.sol";
 import "./abstract/TokenManager.sol";
+import "hardhat/console.sol";
 
 contract ICO is LiquidityManager {
 
@@ -27,7 +28,7 @@ contract ICO is LiquidityManager {
     MockPriceFeed public ethUsdPriceFeed;
 
     address[] public createdTokens;
-    uint256 public constant MARKET_CAP_THRESHOLD = 100_000 * 1e18; // $100,000 with 18 decimals
+    uint256 public constant MARKET_CAP_THRESHOLD = 100_000 * 1e8; // $100,000 with 8 decimals
     uint256 public constant PRECISION = 1e18;
 
     // Token address => owner address
@@ -41,7 +42,7 @@ contract ICO is LiquidityManager {
         address _weth9,
         IMultiAMM _amm,
         address _ethUsdPriceFeed
-    ) LiquidityManager(_factory, _nonfungiblePositionManager, _swapRouter, _weth9, _amm) {
+    ) LiquidityManager(_factory, _nonfungiblePositionManager, _swapRouter, _weth9, _amm, address(this)) {
         ethUsdPriceFeed = MockPriceFeed(_ethUsdPriceFeed);
     }
 
@@ -97,46 +98,105 @@ contract ICO is LiquidityManager {
         require(IERC20(tokenAddress).transfer(msg.sender, amountOut), "Token transfer to user failed");
 
 
-
+        uint256 marketCap = getMarketCapInUSD(tokenAddress);
+        console.log("Market cap from contract:", marketCap);
+        console.log("Market cap threshold:", MARKET_CAP_THRESHOLD);
         // Check if the market cap is above the threshold
-        // if (getMarketCapInUSD(tokenAddress) >= MARKET_CAP_THRESHOLD) {
-
-        //     // Withdraw liquidity from AMM
-
+        // if (marketCap >= MARKET_CAP_THRESHOLD) {
+        //     console.log("Market cap is above threshold, withdrawing liquidity");
 
 
         //     // Get current price from AMM
-        // (uint256 priceTokenInWETH, ) = amm.getTokenPrice(tokenAddress, WETH9);
-        
-        // uint160 sqrtPriceX96 = uint160(sqrt((priceTokenInWETH * (1 << 192)) / PRECISION));
-        
-        // uint24 fee = 10000; // 1% fee
-        // int24 tickSpacing = 200; // Tick spacing for HIGH fee tier
-        
-        // // Calculate ticks for full range
-        // int24 tickLower = -887272; // Min tick for full range
-        // int24 tickUpper = 887272;  // Max tick for full range
+        //     (uint256 priceTokenInWETH, ) = amm.getTokenPrice(tokenAddress, WETH9);
+        //     uint160 sqrtPriceX96 = uint160(sqrt((priceTokenInWETH * (1 << 192)) / PRECISION));
 
-        // MintPositionParams memory mintParams = MintPositionParams({
-        //     tokenA: tokenAddress,
-        //     tokenB: WETH9,
-        //     fee: 500, // 0.05%
-        //     tickLower: tickLower,
-        //     tickUpper: tickUpper,
-        //     amountA: amount / 10, // Use 10% of swap amount
-        //     amountB: amount / 10, // Use 10% of swap amount
-        //     amount0Min: 0,
-        //     amount1Min: 0,
-        //     recipient: msg.sender,
-        //     deadline: block.timestamp + 1000,
-        //     sqrtPriceX96: sqrtPriceX96
-        // });
-        
-        // (address poolAddress, uint256 tokenId) = this.bundleLiquidity(mintParams);
-        // console.log("Pool address:", poolAddress);
-        // console.log("Token ID:", tokenId);
+        //     // Withdraw liquidity from AMM
+        //     (uint share, ) = amm.getUserShare(tokenAddress, WETH9, address(this));
+        //     console.log("Share:", share);
+        //     (uint amountAOut, uint amountBOut) = amm.removeLiquidity(tokenAddress, WETH9, share);
+        //     console.log("Amount A out from removeLiquidity:", amountAOut);
+        //     console.log("Amount B out from removeLiquidity:", amountBOut);
+            
+        //     uint24 fee = 10000; // 1% fee
+            
+        //     // Calculate ticks for full range
+        //     int24 tickLower = -887272; // Min tick for full range
+        //     int24 tickUpper = 887272;  // Max tick for full range
+
+        //     MintPositionParams memory mintParams = MintPositionParams({
+        //         tokenA: tokenAddress,
+        //         tokenB: WETH9,
+        //         fee: fee, // 0.1%
+        //         tickLower: tickLower,
+        //         tickUpper: tickUpper,
+        //         amountA: amountAOut,
+        //         amountB: amountBOut,
+        //         amount0Min: 0,
+        //         amount1Min: 0,
+        //         recipient: msg.sender,
+        //         deadline: block.timestamp + 1000,
+        //         sqrtPriceX96: sqrtPriceX96
+        //     });
+            
+        //     (address poolAddress, uint256 tokenId) = this.bundleLiquidity(mintParams);
+        //     console.log("Pool address:", poolAddress);
+        //     console.log("Token ID:", tokenId);
         // }
+    if (marketCap >= MARKET_CAP_THRESHOLD) {
+        console.log("Market cap is above threshold, withdrawing liquidity");
 
+        // Get current price from AMM
+        (uint256 priceTokenInWETH, ) = amm.getTokenPrice(tokenAddress, WETH9);
+        console.log("Price in WETH:", priceTokenInWETH);
+        uint160 sqrtPriceX96 = uint160(sqrt((priceTokenInWETH * (1 << 192)) / PRECISION));
+        console.log("sqrtPriceX96:", sqrtPriceX96);
+
+        // Withdraw liquidity from AMM
+        (uint share, ) = amm.getUserShare(tokenAddress, WETH9, address(this));
+        console.log("Share:", share);
+        (uint amountAOut, uint amountBOut) = amm.removeLiquidity(tokenAddress, WETH9, share);
+        console.log("Amount A out:", amountAOut);
+        console.log("Amount B out:", amountBOut);
+
+        // Check balances before creating pool
+        uint256 balanceA = IERC20(tokenAddress).balanceOf(address(this));
+        uint256 balanceB = IERC20(WETH9).balanceOf(address(this));
+        console.log("ICO contract balances before pool creation:");
+        console.log("Token balance:", balanceA);
+        console.log("WETH balance:", balanceB);
+
+        // Approve tokens for NFT manager
+        IERC20(tokenAddress).approve(address(nonfungiblePositionManager), amountAOut);
+        IERC20(WETH9).approve(address(nonfungiblePositionManager), amountBOut);
+        
+        MintPositionParams memory mintParams = MintPositionParams({
+            tokenA: tokenAddress,
+            tokenB: WETH9,
+            fee: 10000, // 1% fee
+            tickLower: -887200,
+            tickUpper: 887200,
+            amountA: amountAOut,
+            amountB: amountBOut,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: msg.sender,
+            deadline: block.timestamp + 1000,
+            sqrtPriceX96: sqrtPriceX96
+        });
+
+        // Add debug logs for pool creation
+        console.log("Creating pool with params:");
+        console.log("Sqrt Price X96:", sqrtPriceX96);
+        console.log("Token A:", tokenAddress);
+        console.log("Token B:", WETH9);
+        console.log("Fee:", mintParams.fee);
+        console.log("Amount A:", amountAOut);
+        console.log("Amount B:", amountBOut);
+        
+        (address poolAddress, uint256 tokenId) = this.bundleLiquidity(mintParams);
+        console.log("Pool address:", poolAddress);
+        console.log("Token ID:", tokenId);
+    }
 
         return amountOut;
     }
