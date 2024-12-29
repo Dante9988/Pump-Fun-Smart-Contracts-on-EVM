@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { artifacts, ethers, network } from 'hardhat';
 import { TickMath } from '@uniswap/v3-sdk';
-import { deployUniswapV3, createPool, mint, swap } from '../scripts/UniswapV3Scripts';
+import { deployUniswapV3, createPool, mint, swap, Addresses } from '../scripts/UniswapV3Scripts';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import { TransactionResponse } from '@ethersproject/abstract-provider';
 import TokenInterface from '../tools/abi/erc20.json';
@@ -1016,6 +1016,14 @@ describe('ICO', () => {
             let uniswapPool = await uniswapV3.V3Factory.getPool(tokenAddress, uniswapV3.WETH9.address, 10000);
             console.log("Uniswap pool:", uniswapPool);
             let poolContract = await getPoolInfo(uniswapPool, deployer as unknown as Signer);
+
+
+            let addresses: Addresses = {
+                token1: uniswapV3.WETH9.address,
+                token2: tokenAddress
+            }
+
+            await swap(deployer as unknown as HardhatEthersSigner, addresses, uniswapPool, "1");
             
         });
 

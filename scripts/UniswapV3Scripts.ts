@@ -112,7 +112,7 @@ interface DeployedContracts {
     SwapRouter: Contract;
 }
 
-interface Addresses {
+export interface Addresses {
     token1: string;
     token2: string;
 }
@@ -377,6 +377,7 @@ export async function mint(
 export async function swap(
     signer: HardhatEthersSigner,
     addresses: Addresses,
+    poolAddress: string,
     amountInOverride: string | null = null
 ): Promise<TransactionResponse> {
     try {
@@ -435,12 +436,9 @@ export async function swap(
             'Token 2'
         );
 
-        const outputFilePath = path.resolve(__dirname, `../tools/common/UniswapV3Address_${network.chainId}.json`);
-        const updatedData = await fs.readFile(outputFilePath, 'utf8');
-        const parsedData = JSON.parse(updatedData);
-        console.log('Swap PoolAddress', parsedData.PoolAddress);
+        console.log('Swap PoolAddress', poolAddress);
 
-        const poolContract = new ethers.Contract(parsedData.PoolAddress, artifacts.UniswapV3Pool, signer as unknown as Signer);
+        const poolContract = new ethers.Contract(poolAddress, artifacts.UniswapV3Pool, signer as unknown as Signer);
         const [token0, token1, fee, tickSpacing, liquidity, slot0] = await Promise.all([
             poolContract.token0(),
             poolContract.token1(),
