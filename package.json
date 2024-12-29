@@ -7,6 +7,7 @@
   "scripts": {
     "test:ico": "hardhat test test/ICO.spec.ts",
     "test:amm": "hardhat test test/MultiAMM.spec.ts",
+    "test:mock": "hardhat test test/MockPriceFeed.spec.ts",
     "test": "hardhat test"
   },
   "devDependencies": {

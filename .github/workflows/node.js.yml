@@ -34,3 +34,8 @@ jobs:
       env:
         PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
       run: yarn test:amm
+
+    - name: Run Mock tests
+      env:
+        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      run: yarn test:mock  
