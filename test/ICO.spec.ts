@@ -1024,6 +1024,18 @@ describe('ICO', () => {
                 deployer as unknown as Signer
             );
 
+            let addresses: Addresses = {
+                token1: uniswapV3.WETH9.address,
+                token2: tokenAddress
+            }
+
+            await swap(deployer as unknown as HardhatEthersSigner, addresses, uniswapPool, "0.000000030315789473");
+
+            await getPoolInfo(
+                uniswapPool, 
+                deployer as unknown as Signer
+            );
+
             // Get price data from pool
             let slot0 = await poolContract.slot0();
             let sqrtPriceX96 = slot0[0];
@@ -1046,6 +1058,7 @@ describe('ICO', () => {
 
             // Calculate token price in USD
             priceInUSD = priceInWETH * ethPriceInUSD;
+            console.log('Price in USD:', priceInUSD.toFixed(18));
 
             // Calculate market cap
             totalSupply = await IERC20.attach(tokenAddress).totalSupply();
@@ -1061,55 +1074,55 @@ describe('ICO', () => {
             console.log('Market Cap in USD:', marketCapUSD.toFixed(2));
             console.log('==============================');
 
-            let addresses: Addresses = {
-                token1: uniswapV3.WETH9.address,
-                token2: tokenAddress
-            }
+            // let addresses: Addresses = {
+            //     token1: uniswapV3.WETH9.address,
+            //     token2: tokenAddress
+            // }
 
-            await swap(deployer as unknown as HardhatEthersSigner, addresses, uniswapPool, "0.01", true);
+            // await swap(deployer as unknown as HardhatEthersSigner, addresses, uniswapPool, "0.01", true);
 
 
-            poolContract = await getPoolInfo(
-                uniswapPool, 
-                deployer as unknown as Signer
-            );
+            // poolContract = await getPoolInfo(
+            //     uniswapPool, 
+            //     deployer as unknown as Signer
+            // );
 
-            // Get price data from pool
-            slot0 = await poolContract.slot0();
-            sqrtPriceX96 = slot0[0];
-            tickCurrent = slot0[1];
-            // Calculate price correctly
-            sqrtRatio = Number(sqrtPriceX96) / Number(2n ** 96n);
-            price = (sqrtRatio * sqrtRatio) / 1e18;  // Divide by PRECISION to match MultiAMM
+            // // Get price data from pool
+            // slot0 = await poolContract.slot0();
+            // sqrtPriceX96 = slot0[0];
+            // tickCurrent = slot0[1];
+            // // Calculate price correctly
+            // sqrtRatio = Number(sqrtPriceX96) / Number(2n ** 96n);
+            // price = (sqrtRatio * sqrtRatio) / 1e18;  // Divide by PRECISION to match MultiAMM
 
-            // Get token ordering
-            token0 = await poolContract.token0();
-            token1 = await poolContract.token1();
+            // // Get token ordering
+            // token0 = await poolContract.token0();
+            // token1 = await poolContract.token1();
 
-            // Calculate price in WETH based on token ordering
-            priceInWETH = token0 < token1 ? price : 1/price;
-            console.log('Raw price in WETH:', priceInWETH.toFixed(18));
+            // // Calculate price in WETH based on token ordering
+            // priceInWETH = token0 < token1 ? price : 1/price;
+            // console.log('Raw price in WETH:', priceInWETH.toFixed(18));
 
-            // Get ETH/USD price from price feed (340000000000 = $3,400 with 8 decimals)
-            const [, ethPriceUSD2, , ,] = await mockPriceFeed.latestRoundData();
-            ethPriceInUSD = Number(ethPriceUSD2) / 1e8; // Convert from 8 decimals
+            // // Get ETH/USD price from price feed (340000000000 = $3,400 with 8 decimals)
+            // const [, ethPriceUSD2, , ,] = await mockPriceFeed.latestRoundData();
+            // ethPriceInUSD = Number(ethPriceUSD2) / 1e8; // Convert from 8 decimals
 
-            // Calculate token price in USD
-            priceInUSD = priceInWETH * ethPriceInUSD;
+            // // Calculate token price in USD
+            // priceInUSD = priceInWETH * ethPriceInUSD;
 
-            // Calculate market cap
-            totalSupply = await IERC20.attach(tokenAddress).totalSupply();
-            marketCapUSD = priceInUSD * Number(ethers.utils.formatEther(totalSupply));
+            // // Calculate market cap
+            // totalSupply = await IERC20.attach(tokenAddress).totalSupply();
+            // marketCapUSD = priceInUSD * Number(ethers.utils.formatEther(totalSupply));
 
-            console.log('=== Uniswap V3 Pool Analysis ===');
-            console.log('sqrtPriceX96:', sqrtPriceX96.toString());
-            console.log('Current tick:', tickCurrent);
-            console.log('Price in WETH:', priceInWETH.toFixed(18));
-            console.log('ETH Price in USD:', ethPriceInUSD);
-            console.log('Token Price in USD:', priceInUSD.toFixed(18));
-            console.log('Total Supply:', ethers.utils.formatEther(totalSupply));
-            console.log('Market Cap in USD:', marketCapUSD.toFixed(2));
-            console.log('==============================');
+            // console.log('=== Uniswap V3 Pool Analysis ===');
+            // console.log('sqrtPriceX96:', sqrtPriceX96.toString());
+            // console.log('Current tick:', tickCurrent);
+            // console.log('Price in WETH:', priceInWETH.toFixed(18));
+            // console.log('ETH Price in USD:', ethPriceInUSD);
+            // console.log('Token Price in USD:', priceInUSD.toFixed(18));
+            // console.log('Total Supply:', ethers.utils.formatEther(totalSupply));
+            // console.log('Market Cap in USD:', marketCapUSD.toFixed(2));
+            // console.log('==============================');
             
         });
 

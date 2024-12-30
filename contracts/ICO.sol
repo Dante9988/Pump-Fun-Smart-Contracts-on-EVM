@@ -13,9 +13,10 @@ import "@uniswap/v3-periphery/contracts/base/Multicall.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "./abstract/LiquidityManager.sol";
 import "./abstract/TokenManager.sol";
+import "./SqrtPriceCalculator.sol";
 import "hardhat/console.sol";
 
-contract ICO is LiquidityManager {
+contract ICO is LiquidityManager, SqrtPriceCalculator {
 
     using PriceLib for address;
 
@@ -124,8 +125,8 @@ contract ICO is LiquidityManager {
                 tokenA: tokenAddress,
                 tokenB: WETH9,
                 fee: 10000, // 1% fee
-                tickLower: -887200,
-                tickUpper: 887200,
+                tickLower: -885200,
+                tickUpper: 885200,
                 amountA: amountAOut,
                 amountB: amountBOut,
                 amount0Min: 0,
@@ -156,24 +157,14 @@ contract ICO is LiquidityManager {
 
     // Internal functions
 
-    function sqrt(uint256 x) internal pure returns (uint256 y) {
-        uint256 z = (x + 1) / 2;
-        y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
-        }
-    }
-
-    function calculateSqrtPriceX96(uint priceAinB) internal pure returns (uint160 sqrtPriceX96) {
-        require(priceAinB > 0, "Price must be positive");
-
-        // Calculate sqrtPriceX96 directly from priceAinB
-        uint256 ratioTimes2_192 = priceAinB * (1 << 192); // Multiply by 2^192
-        uint256 sqrtRatio = sqrt(ratioTimes2_192);        // Take the square root
-
-        sqrtPriceX96 = uint160(sqrtRatio);
-    }
+    // function sqrt(uint256 x) internal pure returns (uint256 y) {
+    //     uint256 z = (x + 1) / 2;
+    //     y = x;
+    //     while (z < y) {
+    //         y = z;
+    //         z = (x / z + z) / 2;
+    //     }
+    // }
 
 
 
