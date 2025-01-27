@@ -627,6 +627,62 @@ describe('ICO', () => {
 
             const amounts = await getTokenAmountsFromLiquidity(poolContract);
             console.log("Amounts:", amounts);
+
+            // Calculate market cap
+            // Get price data from pool
+            const slot0 = await poolContract.slot0();
+            const sqrtPriceX96 = slot0[0];
+            const tickCurrent = slot0[1];
+
+            // Convert sqrtPriceX96 to price with proper decimal handling
+            const sqrtRatio = BigInt(sqrtPriceX96) * BigInt(sqrtPriceX96);
+            const price = Number(sqrtRatio) / Number(2n ** 192n);  // 96 * 2 for squaring
+
+            // Get token ordering
+            const token0Address = await poolContract.token0();
+            const token1Address = await poolContract.token1();
+
+            // Calculate price in WETH based on token ordering
+            const priceInWETH = token0Address.toLowerCase() === tokenAddress.toLowerCase() ? price : 1/price;
+            console.log('Raw sqrtPriceX96:', sqrtPriceX96.toString());
+            console.log('Price calculation:', {
+                sqrtRatio: sqrtRatio.toString(),
+                denominator: (2n ** 192n).toString(),
+                price: price,
+                priceInWETH: priceInWETH
+            });
+
+            // Get ETH/USD price from price feed
+            const [, ethPriceUSD, , ,] = await mockPriceFeed.latestRoundData();
+            const ethPriceInUSD = Number(ethPriceUSD) / 1e8; // Convert from 8 decimals
+
+            // Calculate token price in USD
+            const priceInUSD = priceInWETH * ethPriceInUSD;
+
+            // Get total supply
+            const totalSupply = await token0.totalSupply();
+
+            // Calculate market cap
+            const marketCapUSD = priceInUSD * Number(ethers.utils.formatEther(totalSupply));
+
+            console.log('=== Market Cap Analysis ===');
+            console.log('sqrtPriceX96:', sqrtPriceX96.toString());
+            console.log('Current tick:', tickCurrent);
+            console.log('Token is token0:', token0Address.toLowerCase() === tokenAddress.toLowerCase());
+            console.log('Raw price:', price);
+            console.log('Price in WETH:', priceInWETH.toFixed(18));
+            console.log('ETH Price in USD:', ethPriceInUSD);
+            console.log('Token Price in USD:', priceInUSD.toFixed(18));
+            console.log('Total Supply:', ethers.utils.formatEther(totalSupply));
+            console.log('Market Cap in USD:', marketCapUSD.toFixed(2));
+
+            // Also log pool balances for verification
+            const token0Balance = await token0.balanceOf(poolContract.address);
+            const token1Balance = await token1.balanceOf(poolContract.address);
+            console.log('Pool balances:');
+            console.log('Token0:', ethers.utils.formatEther(token0Balance));
+            console.log('Token1:', ethers.utils.formatEther(token1Balance));
+            console.log('========================');
         });
 
         // it('should make a second swap', async () => {
