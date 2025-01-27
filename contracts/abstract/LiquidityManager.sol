@@ -86,10 +86,6 @@ abstract contract LiquidityManager is ILiquidityManager {
             ? (tokenA, tokenB) 
             : (tokenB, tokenA);
 
-        console.log("SqrtPriceX96 from createPool:", sqrtPriceX96);
-        console.log("Token0 Amount from createPool:", amountA);
-        console.log("Token1 Amount from createPool:", amountB);
-
         if (factory.getPool(tokenA, tokenB, fee) == address(0)) {
             poolAddress = nonfungiblePositionManager.createAndInitializePoolIfNecessary(
                 token0,
@@ -98,10 +94,6 @@ abstract contract LiquidityManager is ILiquidityManager {
                 sqrtPriceX96
             );
             require(poolAddress != address(0), "Pool creation failed.");
-
-            IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
-            (uint160 actualSqrtPrice, , , , , , ) = pool.slot0();
-            console.log("Pool's Actual sqrtPriceX96:", actualSqrtPrice);
             
             emit PoolCreated(poolAddress);
         } else {
@@ -125,9 +117,6 @@ abstract contract LiquidityManager is ILiquidityManager {
         require(IERC20(params.tokenA).approve(address(nonfungiblePositionManager), params.amountA), "Token A approval failed");
         require(IERC20(params.tokenB).approve(address(nonfungiblePositionManager), params.amountB), "Token B approval failed");
 
-        console.log("Allowence of NFT position manager for tokenA:", IERC20(params.tokenA).allowance(address(this), address(nonfungiblePositionManager)));
-        console.log("Allowence of NFT position manager for tokenB:", IERC20(params.tokenB).allowance(address(this), address(nonfungiblePositionManager)));
-
         // Sort tokens
         require(params.tokenA != params.tokenB, 'IDENTICAL_ADDRESSES');
         (address token0, address token1) = params.tokenA < params.tokenB 
@@ -139,17 +128,6 @@ abstract contract LiquidityManager is ILiquidityManager {
         (uint256 amount0Desired, uint256 amount1Desired) = token0 == params.tokenA 
             ? (params.amountA, params.amountB)
             : (params.amountB, params.amountA);
-
-        console.log("Balance token0 of this contract: ", IERC20(token0).balanceOf(address(this)));
-        console.log("Balance token1 of this contract: ", IERC20(token1).balanceOf(address(this)));
-        console.log("Balance of ICO contract:", IERC20(token0).balanceOf(address(this)));
-        console.log("Balance of ICO contract:", IERC20(token1).balanceOf(address(this)));
-        console.log("Liquidity manager address:", address(this));
-
-        console.log("Token0: address", token0);
-        console.log("Token1: address", token1);
-        console.log("Token0: symbol", IERC20(token0).symbol());
-        console.log("Token1: symbol", IERC20(token1).symbol());
 
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams({
             token0: token0,
@@ -208,7 +186,6 @@ abstract contract LiquidityManager is ILiquidityManager {
             params.sqrtPriceX96
         );
         require(poolAddress != address(0), "Pool creation failed");
-        console.log("Pool address from bundleLiquidity:", poolAddress);
         
         (tokenId, liquidity, amount0, amount1) = mintPosition(params);
         require(tokenId != 0, "Minting position failed");
