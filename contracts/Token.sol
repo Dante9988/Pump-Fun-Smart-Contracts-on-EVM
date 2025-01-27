@@ -4,6 +4,7 @@ pragma solidity ^0.7.6;
 interface IERC20 {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
+    function symbol() external view returns (string memory);
     function createTokenViaCreate2(bytes32 salt, bytes memory bytecode) external returns (address);
     function transfer(address recipient, uint256 amount)
         external
@@ -30,7 +31,7 @@ contract Token is IERC20 {
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
     string public name;
-    string public symbol;
+    string public override symbol;
     uint8 public decimals;
     address public owner;
 

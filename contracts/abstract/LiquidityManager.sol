@@ -4,6 +4,7 @@ pragma abicoder v2;
 
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "../interfaces/IUniswapV3Factory.sol";
+import "../interfaces/IUniswapV3Pools.sol";
 import "../interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "../interfaces/IMultiAMM.sol";
@@ -86,6 +87,8 @@ abstract contract LiquidityManager is ILiquidityManager {
             : (tokenB, tokenA);
 
         console.log("SqrtPriceX96 from createPool:", sqrtPriceX96);
+        console.log("Token0 Amount from createPool:", amountA);
+        console.log("Token1 Amount from createPool:", amountB);
 
         if (factory.getPool(tokenA, tokenB, fee) == address(0)) {
             poolAddress = nonfungiblePositionManager.createAndInitializePoolIfNecessary(
@@ -95,6 +98,10 @@ abstract contract LiquidityManager is ILiquidityManager {
                 sqrtPriceX96
             );
             require(poolAddress != address(0), "Pool creation failed.");
+
+            IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
+            (uint160 actualSqrtPrice, , , , , , ) = pool.slot0();
+            console.log("Pool's Actual sqrtPriceX96:", actualSqrtPrice);
             
             emit PoolCreated(poolAddress);
         } else {
@@ -106,7 +113,7 @@ abstract contract LiquidityManager is ILiquidityManager {
 
     function mintPosition(
         MintPositionParams calldata params
-    ) public virtual override onlyWhitelisted returns (uint256 tokenId) {
+    ) public virtual override onlyWhitelisted returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         address poolAddress = factory.getPool(params.tokenA, params.tokenB, params.fee);
         require(poolAddress != address(0), "Pool does not exist");
 
@@ -117,6 +124,9 @@ abstract contract LiquidityManager is ILiquidityManager {
         // Approve tokens for the position manager
         require(IERC20(params.tokenA).approve(address(nonfungiblePositionManager), params.amountA), "Token A approval failed");
         require(IERC20(params.tokenB).approve(address(nonfungiblePositionManager), params.amountB), "Token B approval failed");
+
+        console.log("Allowence of NFT position manager for tokenA:", IERC20(params.tokenA).allowance(address(this), address(nonfungiblePositionManager)));
+        console.log("Allowence of NFT position manager for tokenB:", IERC20(params.tokenB).allowance(address(this), address(nonfungiblePositionManager)));
 
         // Sort tokens
         require(params.tokenA != params.tokenB, 'IDENTICAL_ADDRESSES');
@@ -129,6 +139,17 @@ abstract contract LiquidityManager is ILiquidityManager {
         (uint256 amount0Desired, uint256 amount1Desired) = token0 == params.tokenA 
             ? (params.amountA, params.amountB)
             : (params.amountB, params.amountA);
+
+        console.log("Balance token0 of this contract: ", IERC20(token0).balanceOf(address(this)));
+        console.log("Balance token1 of this contract: ", IERC20(token1).balanceOf(address(this)));
+        console.log("Balance of ICO contract:", IERC20(token0).balanceOf(address(this)));
+        console.log("Balance of ICO contract:", IERC20(token1).balanceOf(address(this)));
+        console.log("Liquidity manager address:", address(this));
+
+        console.log("Token0: address", token0);
+        console.log("Token1: address", token1);
+        console.log("Token0: symbol", IERC20(token0).symbol());
+        console.log("Token1: symbol", IERC20(token1).symbol());
 
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams({
             token0: token0,
@@ -143,20 +164,29 @@ abstract contract LiquidityManager is ILiquidityManager {
             recipient: params.recipient,
             deadline: params.deadline
         });
+
+        console.log("=== MINT PARAMS ===");
         console.log("token0:", token0);
         console.log("token1:", token1);
         console.log("fee:", params.fee);
-        //console.log("tickLower:", params.tickLower);
-        //console.log("tickUpper:", params.tickUpper);
-        console.log("amount0Desired:", amount0Desired);
-        console.log("amount1Desired:", amount1Desired);
+        // console.log("tickLower:", params.tickLower);
+        // console.log("tickUpper:", params.tickUpper);
+        console.log("amount0Desired (raw):", amount0Desired);
+        console.log("amount0Desired (adjusted):", amount0Desired / 1e18);
+        console.log("amount1Desired (raw):", amount1Desired);
+        console.log("amount1Desired (adjusted):", amount1Desired / 1e18);
         console.log("amount0Min:", params.amount0Min);
         console.log("amount1Min:", params.amount1Min);
-        console.log("recipient:", params.recipient);
-        console.log("deadline:", params.deadline);
 
-        (tokenId, , , ) = nonfungiblePositionManager.mint(mintParams);
+        (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
         require(tokenId != 0, "Minting position failed");
+
+        console.log("=== MINT RESULTS ===");
+        console.log("Liquidity:", liquidity);
+        console.log("Amount0 (raw):", amount0);
+        console.log("Amount0 (adjusted):", amount0 / 1e18);
+        console.log("Amount1 (raw):", amount1);
+        console.log("Amount1 (adjusted):", amount1 / 1e18);
 
         emit LiquidityAdded(
             tokenId,
@@ -164,13 +194,11 @@ abstract contract LiquidityManager is ILiquidityManager {
             params.tokenA,
             params.tokenB
         );
-
-        return tokenId;
     }
 
     function bundleLiquidity(
         MintPositionParams calldata params
-    ) public virtual override onlyWhitelisted returns (address poolAddress, uint256 tokenId) {
+    ) public virtual override onlyWhitelisted returns (address poolAddress, uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         poolAddress = createPool(
             params.tokenA,
             params.tokenB,
@@ -182,7 +210,11 @@ abstract contract LiquidityManager is ILiquidityManager {
         require(poolAddress != address(0), "Pool creation failed");
         console.log("Pool address from bundleLiquidity:", poolAddress);
         
-        tokenId = mintPosition(params);
+        (tokenId, liquidity, amount0, amount1) = mintPosition(params);
         require(tokenId != 0, "Minting position failed");
     }
 }
+
+
+
+

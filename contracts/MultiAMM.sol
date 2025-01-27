@@ -21,7 +21,7 @@ contract MultiAMM {
 
     // A basic precision constant
     uint constant PRECISION = 1e18;
-    uint256 constant MIN_ETH_LIQUIDITY = 5 * 1e18;  // 5 ETH minimum for normal mode
+    uint256 constant MIN_ETH_LIQUIDITY = 5 * 1e18;  // 1 ETH minimum for normal mode
 
     address public WETH9;
 
@@ -223,129 +223,125 @@ contract MultiAMM {
     // swapExactTokenAforTokenB & swapExactTokenBforTokenA remain the same logic.
     // Just add the Swap event.
 
-function swapExactTokenAforTokenB(
-    address _tokenA,
-    address _tokenB,
-    uint _amountAIn
-)
-    public
-    returns (uint amountBOut)
-{
-    bytes32 poolId = _getPoolId(_tokenA, _tokenB);
-    Pool storage pool = pools[poolId];
-    require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB > 0, "NO_POOL");
+    function swapExactTokenAforTokenB(
+        address _tokenA,
+        address _tokenB,
+        uint _amountAIn
+    ) public returns (uint amountBOut) {
+        bytes32 poolId = _getPoolId(_tokenA, _tokenB);
+        Pool storage pool = pools[poolId];
+        require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB > 0, "NO_POOL");
 
         // 1. Approve B in
-    require(Token(_tokenA).approve(address(this), _amountAIn), "approve failed");
+        require(Token(_tokenA).approve(address(this), _amountAIn), "approve failed");
 
-    // 2. Transfer B in
-    require(Token(_tokenA).transferFrom(msg.sender, address(this), _amountAIn), "transferFrom B failed");
+        // 2. Transfer B in
+        require(Token(_tokenA).transferFrom(msg.sender, address(this), _amountAIn), "transferFrom B failed");
 
-    if (pool.zeroPriceActive) {
-        // For initial swap, use fixed ratio with better precision
-        // 1e11 wei (0.0001 ETH) = 1 token (1e18 wei)
-        amountBOut = (_amountAIn * 1e11) / 1e18;
-        require(amountBOut <= pool.tokenBalanceB, "Not enough tokens in pool");
-        
-        // Update pool balances in correct order
-        pool.tokenBalanceB -= amountBOut;
-        pool.tokenBalanceA += _amountAIn;  
-        pool.K = pool.tokenBalanceA * pool.tokenBalanceB;
+        if (pool.zeroPriceActive) {
+            // For initial swap, use fixed ratio with better precision
+            // 1e11 wei (0.00000000001 ETH) = 1 token (1e18 wei)
+            amountBOut = (_amountAIn * 1e11) / 1e18;
+            require(amountBOut <= pool.tokenBalanceB, "Not enough tokens in pool");
+            
+            // Update pool balances in correct order
+            pool.tokenBalanceB -= amountBOut;
+            pool.tokenBalanceA += _amountAIn;  
+            pool.K = pool.tokenBalanceA * pool.tokenBalanceB;
 
-        // Only switch to normal mode if we still have enough WETH
-        if (pool.tokenBalanceB >= MIN_ETH_LIQUIDITY) {
-            pool.zeroPriceActive = false;
+            // Only switch to normal mode if we still have enough WETH
+            if (pool.tokenBalanceB >= MIN_ETH_LIQUIDITY) {
+                pool.zeroPriceActive = false;
+            }
+        } else {
+            // Normal x*y=K math
+            uint newBalanceA = pool.tokenBalanceA + _amountAIn;
+            uint newBalanceB = pool.K / newBalanceA;
+            amountBOut = pool.tokenBalanceB - newBalanceB;
+            
+            require(amountBOut <= pool.tokenBalanceB, "INSUFFICIENT_WETH");
+            require(amountBOut > 0, "ZERO_WETH_OUT");
+
+            // Update pool balances
+            pool.tokenBalanceA = newBalanceA;
+            pool.tokenBalanceB = newBalanceB;
         }
-    } else {
-        // Normal x*y=K math
-        uint newBalanceA = pool.tokenBalanceA + _amountAIn;
-        uint newBalanceB = pool.K / newBalanceA;
-        amountBOut = pool.tokenBalanceB - newBalanceB;
-        
-        require(amountBOut <= pool.tokenBalanceB, "INSUFFICIENT_WETH");
-        require(amountBOut > 0, "ZERO_WETH_OUT");
 
-        // Update pool balances
-        pool.tokenBalanceA = newBalanceA;
-        pool.tokenBalanceB = newBalanceB;
+        require(IERC20(_tokenB).transfer(msg.sender, amountBOut), "transfer B failed");
+
+        emit Swap(
+            msg.sender,
+            _tokenA,
+            _amountAIn,
+            _tokenB,
+            amountBOut,
+            pool.tokenBalanceA,
+            pool.tokenBalanceB,
+            block.timestamp
+        );
     }
 
-    require(IERC20(_tokenB).transfer(msg.sender, amountBOut), "transfer B failed");
+    function swapExactTokenBforTokenA(
+        address _tokenA,
+        address _tokenB,
+        uint _amountBIn
+    ) public returns (uint amountAOut) {
+        bytes32 poolId = _getPoolId(_tokenA, _tokenB);
+        Pool storage pool = pools[poolId];
+        require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB >= 0, "NO_POOL");
 
-    emit Swap(
-        msg.sender,
-        _tokenA,
-        _amountAIn,
-        _tokenB,
-        amountBOut,
-        pool.tokenBalanceA,
-        pool.tokenBalanceB,
-        block.timestamp
-    );
-}
+        // 1. Approve B in
+        require(Token(_tokenB).approve(address(this), _amountBIn), "approve failed");
 
-function swapExactTokenBforTokenA(
-    address _tokenA,
-    address _tokenB,
-    uint _amountBIn
-)
-    public
-    returns (uint amountAOut)
-{
-    bytes32 poolId = _getPoolId(_tokenA, _tokenB);
-    Pool storage pool = pools[poolId];
-    require(pool.tokenBalanceA >= 0 && pool.tokenBalanceB >= 0, "NO_POOL");
+        // 2. Transfer B in
+        require(Token(_tokenB).transferFrom(msg.sender, address(this), _amountBIn), "transferFrom B failed");
 
-    // 1. Approve B in
-    require(Token(_tokenB).approve(address(this), _amountBIn), "approve failed");
+        if (pool.zeroPriceActive) {
+            // When someone adds WETH (amountBIn), calculate how many tokens they get (amountAOut)
+            // Initial fixed price: 1 WETH = 65,000,000 tokens (65M tokens)
+            // Formula: (WETH_amount * 13e14) / 2e7 = token_amount
+            // Example: 1 WETH (1e18) will get you 65M tokens
+            amountAOut = (_amountBIn * 22e14) / 2e7;
+            require(amountAOut <= pool.tokenBalanceA, "Not enough tokens in pool");
+            
+            // Update pool state
+            pool.tokenBalanceA -= amountAOut;
+            pool.tokenBalanceB += _amountBIn;
+            pool.K = pool.tokenBalanceA * pool.tokenBalanceB;  // Set initial K
 
-    // 2. Transfer B in
-    require(Token(_tokenB).transferFrom(msg.sender, address(this), _amountBIn), "transferFrom B failed");
+            // Only switch to normal mode if we have enough ETH liquidity
+            if (pool.tokenBalanceB >= MIN_ETH_LIQUIDITY) {
+                pool.zeroPriceActive = false;
+            }
+        } else {
+            // Normal x*y=K math with PRECISION scaling
+            uint newBalanceB = pool.tokenBalanceB + _amountBIn;
+            uint newBalanceA = pool.K / newBalanceB;
+            // Calculate output amount with slippage limit (e.g., max 10% price impact)
+            amountAOut = pool.tokenBalanceA - newBalanceA;
+            uint priceImpact = (amountAOut * 1e18) / pool.tokenBalanceA;
+            
+            require(amountAOut <= pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
 
-    if (pool.zeroPriceActive) {
-        // For initial swap, use fixed ratio with better precision
-        // 1e11 wei (0.0001 ETH) = 1 token (1e18 wei)
-        amountAOut = (_amountBIn * 1e18) / 1e11;
-        require(amountAOut <= pool.tokenBalanceA, "Not enough tokens in pool");
-        
-        // Update pool state
-        pool.tokenBalanceA -= amountAOut;
-        pool.tokenBalanceB += _amountBIn;
-        pool.K = pool.tokenBalanceA * pool.tokenBalanceB;  // Set initial K
-
-        // Only switch to normal mode if we have enough ETH liquidity
-        if (pool.tokenBalanceB >= MIN_ETH_LIQUIDITY) {
-            pool.zeroPriceActive = false;
+            // Update pool balances
+            pool.tokenBalanceB = newBalanceB;
+            pool.tokenBalanceA = newBalanceA;
+            // K remains unchanged
         }
-    } else {
-        // Normal x*y=K math with PRECISION scaling
-        uint newBalanceB = pool.tokenBalanceB + _amountBIn;
-        uint newBalanceA = pool.K / newBalanceB;
-        // Calculate output amount with slippage limit (e.g., max 10% price impact)
-        amountAOut = pool.tokenBalanceA - newBalanceA;
-        uint priceImpact = (amountAOut * 1e18) / pool.tokenBalanceA;
-        
-        require(amountAOut <= pool.tokenBalanceA, "INSUFFICIENT_LIQUIDITY");
 
-        // Update pool balances
-        pool.tokenBalanceB = newBalanceB;
-        pool.tokenBalanceA = newBalanceA;
-        // K remains unchanged
+        require(IERC20(_tokenA).transfer(msg.sender, amountAOut), "transfer A failed");
+
+        emit Swap(
+            msg.sender,
+            _tokenB,
+            _amountBIn,
+            _tokenA,
+            amountAOut,
+            pool.tokenBalanceA,
+            pool.tokenBalanceB,
+            block.timestamp
+        );
     }
-
-    require(IERC20(_tokenA).transfer(msg.sender, amountAOut), "transfer A failed");
-
-    emit Swap(
-        msg.sender,
-        _tokenB,
-        _amountBIn,
-        _tokenA,
-        amountAOut,
-        pool.tokenBalanceA,
-        pool.tokenBalanceB,
-        block.timestamp
-    );
-}
 
     //--------------------------------------------------------------------------
     // "CALCULATE" VIEW FUNCTIONS
@@ -452,8 +448,8 @@ function swapExactTokenBforTokenA(
         
         if (pool.zeroPriceActive) {
             // Initial fixed price
-            priceAinB = 1e11;  
-            priceBinA = 1e18 / 1e11;
+            priceAinB = 1e11;
+            priceBinA = uint256(1e18) / priceAinB;
         } else {
             require(pool.tokenBalanceA > 0 && pool.tokenBalanceB > 0, "Cannot calculate price with zero balance");
             // Use spot price from current pool balances

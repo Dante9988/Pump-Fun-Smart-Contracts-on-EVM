@@ -46,9 +46,9 @@ interface ILiquidityManager {
 
     function mintPosition(
         MintPositionParams calldata params
-    ) external returns (uint256 tokenId);
+    ) external returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
 
     function bundleLiquidity(
         MintPositionParams calldata params
-    ) external returns (address poolAddress, uint256 tokenId);
+    ) external returns (address poolAddress, uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
 }
