@@ -11,22 +11,20 @@ import "../interfaces/IMultiAMM.sol";
 import "../libs/PriceLib.sol"; 
 import "../interfaces/ILiquidityManager.sol";
 import "hardhat/console.sol";
+import "../MockPriceFeed.sol";
+import "../SqrtPriceCalculator.sol";
+import "./CollectFeesManager.sol";
 
-abstract contract LiquidityManager is ILiquidityManager {
+abstract contract LiquidityManager is ILiquidityManager, SqrtPriceCalculator, CollectFeesManager {
     using PriceLib for address;
 
     IUniswapV3Factory public immutable factory;
-    INonfungiblePositionManager public immutable nonfungiblePositionManager;
     ISwapRouter public immutable swapRouter;
     IMultiAMM public immutable amm;
     address public immutable WETH9;
-    address public owner;
     mapping(address => bool) public whitelisted;
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
-    }
+    MockPriceFeed public ethUsdPriceFeed;
+    uint256 public constant MARKET_CAP_THRESHOLD = 85_000 * 1e8;
 
     modifier onlyWhitelisted() {
         require(whitelisted[msg.sender], "Only whitelisted users can call this function");
@@ -38,17 +36,18 @@ abstract contract LiquidityManager is ILiquidityManager {
         address _nonfungiblePositionManager,
         address _swapRouter,
         address _weth9,
-        IMultiAMM _amm,
-        address _ico
-    ) {
+        address _amm,
+        address _ico,
+        address _ethUsdPriceFeed
+    ) CollectFeesManager(_nonfungiblePositionManager, msg.sender) {
         factory = IUniswapV3Factory(_factory);
         nonfungiblePositionManager = INonfungiblePositionManager(_nonfungiblePositionManager);
         swapRouter = ISwapRouter(_swapRouter);
         WETH9 = _weth9;
-        amm = _amm;
-        owner = msg.sender;
+        amm = IMultiAMM(_amm);
         whitelisted[owner] = true;
         whitelisted[_ico] = true;
+        ethUsdPriceFeed = MockPriceFeed(_ethUsdPriceFeed);
     }
 
     function getOwnerShares(address tokenAddress) external view override returns (uint256, uint256) {
@@ -143,28 +142,8 @@ abstract contract LiquidityManager is ILiquidityManager {
             deadline: params.deadline
         });
 
-        console.log("=== MINT PARAMS ===");
-        console.log("token0:", token0);
-        console.log("token1:", token1);
-        console.log("fee:", params.fee);
-        // console.log("tickLower:", params.tickLower);
-        // console.log("tickUpper:", params.tickUpper);
-        console.log("amount0Desired (raw):", amount0Desired);
-        console.log("amount0Desired (adjusted):", amount0Desired / 1e18);
-        console.log("amount1Desired (raw):", amount1Desired);
-        console.log("amount1Desired (adjusted):", amount1Desired / 1e18);
-        console.log("amount0Min:", params.amount0Min);
-        console.log("amount1Min:", params.amount1Min);
-
         (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
         require(tokenId != 0, "Minting position failed");
-
-        console.log("=== MINT RESULTS ===");
-        console.log("Liquidity:", liquidity);
-        console.log("Amount0 (raw):", amount0);
-        console.log("Amount0 (adjusted):", amount0 / 1e18);
-        console.log("Amount1 (raw):", amount1);
-        console.log("Amount1 (adjusted):", amount1 / 1e18);
 
         emit LiquidityAdded(
             tokenId,
@@ -190,8 +169,67 @@ abstract contract LiquidityManager is ILiquidityManager {
         (tokenId, liquidity, amount0, amount1) = mintPosition(params);
         require(tokenId != 0, "Minting position failed");
     }
+
+    function bondingCurve(address tokenAddress) internal returns (uint256 tokenId) {
+        // Check if the market cap is above the threshold
+        uint256 marketCap = getMarketCapInUSD(tokenAddress);
+        if (marketCap >= MARKET_CAP_THRESHOLD) {
+
+            // Withdraw liquidity from AMM
+            (uint share, ) = amm.getUserShare(tokenAddress, WETH9, address(this));
+            (uint amountAOut, uint amountBOut) = amm.removeLiquidity(tokenAddress, WETH9, share);
+
+            // Determine token0 and token1 based on address
+            uint256 adjustedRatio = (amountBOut * 10**18) / amountAOut; // token1/token0
+            uint160 sqrtPriceX96 = calculateSqrtPriceX96(adjustedRatio);
+
+            (int24 tickLower, int24 tickUpper) = calculateTicks(sqrtPriceX96, FEE_HIGH, true);
+
+            (address token0, address token1) = tokenAddress < WETH9 
+                ? (tokenAddress, WETH9) 
+                : (WETH9, tokenAddress);
+            
+            MintPositionParams memory mintParams = MintPositionParams({
+                tokenA: token0,
+                tokenB: token1,
+                fee: FEE_HIGH,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amountA: token0 == tokenAddress ? amountAOut : amountBOut,  // Match sorted amounts
+                amountB: token0 == tokenAddress ? amountBOut : amountAOut,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp + 1000,
+                sqrtPriceX96: sqrtPriceX96
+            });
+            
+            (, tokenId, , , ) = this.bundleLiquidity(mintParams);
+        }
+    }
+
+    function getTokenPriceInUSD(address tokenAddress) public view returns (uint256) {
+        return PriceLib.getTokenPriceInUSD(
+            tokenAddress,
+            WETH9,
+            amm,
+            AggregatorV3Interface(ethUsdPriceFeed)
+        );
+    }
+
+    function getMarketCapInUSD(address tokenAddress) public view returns (uint256 marketCapInUSD) {
+        marketCapInUSD = PriceLib.getMarketCapInUSD(
+            tokenAddress,
+            WETH9,
+            amm,
+            AggregatorV3Interface(ethUsdPriceFeed)
+        );
+        return marketCapInUSD;
+    }
+
+    function withdrawFees(address token0, address token1) external onlyWhitelisted {
+        require(IERC20(token0).transfer(msg.sender, IERC20(token0).balanceOf(address(this))), "Token0 transfer failed");
+        require(IERC20(token1).transfer(msg.sender, IERC20(token1).balanceOf(address(this))), "Token1 transfer failed");
+    }
 }
-
-
-
 

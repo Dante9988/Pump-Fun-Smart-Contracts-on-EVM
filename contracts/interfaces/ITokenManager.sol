@@ -18,6 +18,8 @@ interface ITokenManager {
 
     function createToken(TokenParams calldata params) external returns (address tokenAddress);
 
+    function createTokenAndPool(TokenParams calldata params) external returns (address tokenAddress);
+
     function getCreatedTokens() external view returns (address[] memory);
 
     function getUserTokens(address user) external view returns (address[] memory);

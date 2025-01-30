@@ -53,6 +53,7 @@ describe('ICO', () => {
     let user1: SignerWithAddress;
     let user2: SignerWithAddress;
     let transaction: TransactionResponse;
+    let tokenId: string;
     beforeEach(async () => {
         signers = await ethers.getSigners();
         signer = signers[0];
@@ -566,10 +567,18 @@ describe('ICO', () => {
             console.log("Waiting for transaction to be mined")
             
             receipt = await transaction.wait();
-            console.log("Swap transaction:", {
+            console.log("Swap transaction: Bundle Liquidity", {
                 hash: transaction.hash,
-                gasUsed: receipt.gasUsed.toString()
+                gasUsed: receipt.gasUsed.toString(),
+                transaction: receipt
             });
+            const liquidityAddedEvent = receipt.events?.find(
+                (event: any) => event.event === 'LiquidityAdded'
+            );
+            tokenId = liquidityAddedEvent.args.tokenId.toString();
+            console.log("Token ID:", tokenId);
+            
+
         
             // Check final state
             poolAfter = await multiAMM.pools(poolId);
@@ -579,12 +588,6 @@ describe('ICO', () => {
                 K: poolAfter.K.toString(),
                 zeroPriceActive: poolAfter.zeroPriceActive
             });
-
-            // expect(poolAfter.tokenBalanceA).to.be.eq(0);
-            // expect(poolAfter.tokenBalanceB).to.be.eq(0);
-            // expect(poolAfter.K).to.be.eq(0);
-            // expect(poolAfter.zeroPriceActive).to.be.eq(false);
-
 
             // Get Uniswap V3 pool
              console.log('*** Get Uniswap V3 pool ***')
@@ -683,6 +686,74 @@ describe('ICO', () => {
             console.log('Token0:', ethers.utils.formatEther(token0Balance));
             console.log('Token1:', ethers.utils.formatEther(token1Balance));
             console.log('========================');
+
+            // Collect fees
+            const MAX_UINT128 = ethers.BigNumber.from('0xffffffffffffffffffffffffffffffff');
+            const params = {
+                token0: token0.address,
+                token1: token1.address,
+                tokenId,
+                recipient: ico.address,
+                amount0Max: MAX_UINT128,
+                amount1Max: MAX_UINT128,
+            };
+
+            const distributeFeeearlyBuyerBalance0 = await token0.balanceOf(deployer.address);
+            console.log("Early buyer balance ERC20:", ethers.utils.formatEther(distributeFeeearlyBuyerBalance0));
+            const distributeFeeearlyBuyerBalance1 = await token1.balanceOf(deployer.address);
+            console.log("Early buyer balance WETH:", ethers.utils.formatEther(distributeFeeearlyBuyerBalance1));
+
+            transaction = await ico.connect(deployer as unknown as Signer).collectFees(params);
+            receipt = await transaction.wait();
+            console.log("Collect fees transaction:", {
+                hash: transaction.hash,
+                gasUsed: receipt.gasUsed.toString()
+            });
+
+            // Check FeesCollected event
+            const feesCollectedEvent = receipt.events?.find(
+                (event: any) => event.event === 'FeesCollected'
+            );
+            console.log("FeesCollected event:", feesCollectedEvent);
+            expect(feesCollectedEvent).to.not.be.undefined;
+            expect(feesCollectedEvent.args.amount1).to.be.greaterThan(0);
+            expect(feesCollectedEvent.args.tokenId).to.equal(tokenId);
+
+            const distributeFeeearlyBuyerBalance0After = await token0.balanceOf(deployer.address);
+            console.log("Early buyer balance ERC20 after:", ethers.utils.formatEther(distributeFeeearlyBuyerBalance0After));
+            const distributeFeeearlyBuyerBalance1After = await token1.balanceOf(deployer.address);
+            console.log("Early buyer balance WETH after:", ethers.utils.formatEther(distributeFeeearlyBuyerBalance1After));
+
+            //expect(distributeFeeearlyBuyerBalance0After).to.be.greaterThan(distributeFeeearlyBuyerBalance0);
+            expect(distributeFeeearlyBuyerBalance1After).to.be.greaterThan(distributeFeeearlyBuyerBalance1);
+
+            // Check balances
+            const ownerBalanceERC20Before = await IERC20.attach(tokenAddress).balanceOf(deployer.address);
+            const ownerBalanceWETHBefore = await uniswapV3.WETH9.balanceOf(deployer.address);
+            console.log("Owner balance before:", {
+                token: ownerBalanceERC20Before.toString(),
+                WETH: ownerBalanceWETHBefore.toString()
+            });
+
+            // Withdraw fees
+            transaction = await ico.connect(deployer as unknown as Signer).withdrawFees(tokenAddress, uniswapV3.WETH9.address);
+            receipt = await transaction.wait();
+            console.log("Withdraw fees transaction:", {
+                hash: transaction.hash,
+                gasUsed: receipt.gasUsed.toString()
+            });
+
+            // Check balances after withdraw
+            const ownerBalanceERC20After = await IERC20.attach(tokenAddress).balanceOf(deployer.address);
+            const ownerBalanceWETHAfter = await uniswapV3.WETH9.balanceOf(deployer.address);
+            console.log("Owner balance after:", {
+                token: ownerBalanceERC20After.toString(),
+                WETH: ownerBalanceWETHAfter.toString()
+            });
+
+            expect(ownerBalanceERC20After).to.be.greaterThan(ownerBalanceERC20Before);
+            expect(ownerBalanceWETHAfter).to.be.greaterThan(ownerBalanceWETHBefore);
+
         });
     });
 });

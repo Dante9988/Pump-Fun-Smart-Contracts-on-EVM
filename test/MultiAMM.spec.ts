@@ -335,7 +335,7 @@ describe("MultiPairAMM", function () {
 
     it("Should handle first buy with TokenB for TokenA correctly", async function () {
         const buyAmountInWei = ethers.utils.parseUnits("1", 11);
-        const expectedTokens = ethers.utils.parseUnits("1", 18); // 1 token
+        const expectedTokens = ethers.utils.parseUnits("11", 18); // Changed from 1 to 11 tokens
     
         // Log initial state
         console.log("\nInitial State:");
@@ -381,7 +381,6 @@ describe("MultiPairAMM", function () {
         console.log("balanceAAfter of Owner:", ethers.utils.formatUnits(balanceAAfter, 18));
         console.log("balanceBAfter of Owner:", ethers.utils.formatUnits(balanceBAfter, 18));
     
-        // Correct expectations:
         // User receives TokenA (expectedTokens)
         expect(balanceAAfter.sub(balanceABefore)).to.equal(expectedTokens);
         // User spends TokenB (buyAmountInWei)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.6;
 
+import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "hardhat/console.sol";
 
 library FixedPointMath {
@@ -20,6 +21,11 @@ library FixedPointMath {
 
 contract SqrtPriceCalculator {
     using FixedPointMath for uint256;
+    uint24 constant FEE_LOW = 500;
+    uint24 constant FEE_MEDIUM = 3000;
+    uint24 constant FEE_HIGH = 10000;
+    int24 constant FULL_RANGE_LOWER_10000 = -887200; 
+    int24 constant FULL_RANGE_UPPER_10000 =  887200;
 
     uint256 constant Q96 = 2**96;
 
@@ -41,5 +47,60 @@ contract SqrtPriceCalculator {
         require(r <= type(uint160).max, "Overflow");
 
         return uint160(r);
+    }
+
+    function calculateTicks(uint160 sqrtPriceX96, uint24 fee, bool isFullRange) internal pure returns (int24 tickLower, int24 tickUpper) {
+        
+        // If user wants full range for a 1% pool
+        if (isFullRange && fee == 10000) {
+            tickLower = -887200;
+            tickUpper = 887200;
+            return (tickLower, tickUpper);
+        }
+        
+        // 1. Get the current tick for that sqrtPriceX96
+        int24 currentTick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+
+        // 2. Fee tier spacing: 500, 3000, or 10000 => spacing of 10, 60, 200 etc.
+        int24 tickSpacing = getTickSpacing(fee);
+
+        // 3. Decide how "wide" you want the range to be in multiples of `tickSpacing`.
+        //    For example, multiply by 1000.  Make sure it doesn't overflow an int24
+        //    or exceed Uniswap's min/max ticks.
+        int24 wide = tickSpacing * 1000; // e.g., 10, 60, or 200 => 10k, 60k, or 200k
+
+        // 4. Snap currentTick to a multiple of tickSpacing
+        //    so your position is aligned with valid tick boundaries
+        int24 mid = (currentTick / tickSpacing) * tickSpacing;
+
+        // 5. Propose lower & upper
+        int24 lowerCandidate = mid - wide;
+        int24 upperCandidate = mid + wide;
+
+        // 6. Clamp them to Uniswap's allowable range
+        //    (MIN_TICK = -887200, MAX_TICK = 887200). Example from TickMath library.
+        if (lowerCandidate < TickMath.MIN_TICK) {
+            lowerCandidate = TickMath.MIN_TICK;
+        }
+        if (upperCandidate > TickMath.MAX_TICK) {
+            upperCandidate = TickMath.MAX_TICK;
+        }
+
+        // 7. Ensure the lower is still < upper
+        //    If they inverted or got clamped too far, bump the upper
+        if (lowerCandidate >= upperCandidate) {
+            upperCandidate = lowerCandidate + tickSpacing;
+            // If that still doesn't fix it, you might revert or pick a smaller wide factor
+        }
+
+        tickLower = lowerCandidate;
+        tickUpper = upperCandidate;
+    }
+
+    function getTickSpacing(uint24 fee) internal pure returns (int24) {
+        if (fee == FEE_LOW) return 10;
+        if (fee == FEE_MEDIUM) return 60;
+        if (fee == FEE_HIGH) return 200;
+        revert("Invalid fee");
     }
 }

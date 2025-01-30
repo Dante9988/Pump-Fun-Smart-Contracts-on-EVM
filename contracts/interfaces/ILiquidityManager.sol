@@ -18,6 +18,24 @@ interface ILiquidityManager {
         uint160 sqrtPriceX96;
     }
 
+    // struct CollectParams {
+    //     uint256 tokenId;
+    //     address recipient;
+    //     uint128 amount0Max;
+    //     uint128 amount1Max;
+    // }
+
+    struct DistributeFeesParams {
+        address token0;
+        address token1;
+        uint256 amount0;
+        uint256 amount1;
+        uint256 tokenId;
+        address recipient;
+        uint128 amount0Max;
+        uint128 amount1Max;
+    }
+
     event LiquidityAdded(
         uint256 tokenId,
         address poolAddress,

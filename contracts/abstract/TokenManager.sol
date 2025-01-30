@@ -4,8 +4,11 @@ pragma abicoder v2;
 
 import "../Token.sol";
 import "../interfaces/ITokenManager.sol";
+import "../interfaces/IMultiAMM.sol";
+import "./LiquidityManager.sol";
 
-abstract contract TokenManager is ITokenManager {
+abstract contract TokenManager is ITokenManager, LiquidityManager {
+    
 
     address[] public createdTokens;
     mapping(address => address[]) public tokenOwners;
@@ -19,6 +22,16 @@ abstract contract TokenManager is ITokenManager {
         createdTokens.push(tokenAddress);
         tokenOwners[tokenAddress].push(msg.sender);
         emit TokenCreated(tokenAddress, msg.sender, params.name, params.symbol);
+    }
+
+    function createTokenAndPool(TokenParams calldata params) external override returns (address tokenAddress) {
+        tokenAddress = this.createToken(params);
+        uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
+    
+        amm.addLiquidityAtZeroPrice(
+            tokenAddress, balance
+        );
+        return tokenAddress;
     }
 
     function getCreatedTokens() public view override returns (address[] memory) {
