@@ -1,14 +1,15 @@
 {
-  "name": "capstone",
+  "name": "eth.pump",
   "version": "1.0.0",
   "main": "index.js",
   "author": "xadja35@gmail.com",
   "license": "MIT",
   "scripts": {
     "test:ico": "hardhat test test/ICO.spec.ts",
-    "test:amm": "hardhat test test/MultiAMM.spec.ts",
     "test:mock": "hardhat test test/MockPriceFeed.spec.ts",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "test:amm": "hardhat test test/MultiAMM.spec.ts",
+    "test:token": "hardhat test test/Token.spec.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
