@@ -30,8 +30,6 @@ contract ICO is LiquidityManager, TokenManager {
 
         // Register as early buyer if token hasn't migrated yet
         if (!isMigrated[tokenAddress] && !isMigrated[WETH9]) {
-            console.log("Registering early buyer:", msg.sender, tokenAddress, amountOut);
-            console.log("Registering early buyer:", msg.sender, WETH9, amountOut);
             _addEarlyBuyer(tokenAddress, msg.sender, amountOut);
             _addEarlyBuyer(WETH9, msg.sender, amount);
             emit EarlyBuyerRegistered(msg.sender, tokenAddress, amountOut);
@@ -43,11 +41,8 @@ contract ICO is LiquidityManager, TokenManager {
         // Check if the market cap is above the threshold
         tokenId = bondingCurve(tokenAddress);
         if (tokenId != 0) {
-            console.log("Migrating token:", tokenAddress);
             isMigrated[tokenAddress] = true;
             isMigrated[WETH9] = true;
-            console.log("Fee distribution migrated token:", isMigrated[tokenAddress]);
-            console.log("Fee distribution migrated WETH:", isMigrated[WETH9]);
         }
 
         return (amountOut, tokenId);
