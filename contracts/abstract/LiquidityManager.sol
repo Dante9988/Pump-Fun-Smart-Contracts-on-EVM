@@ -11,7 +11,7 @@ import "../interfaces/IMultiAMM.sol";
 import "../libs/PriceLib.sol"; 
 import "../interfaces/ILiquidityManager.sol";
 import "hardhat/console.sol";
-import "../MockPriceFeed.sol";
+import "../ETHPriceFeedConsumer.sol";
 import "../SqrtPriceCalculator.sol";
 import "./CollectFeesManager.sol";
 
@@ -23,7 +23,7 @@ abstract contract LiquidityManager is ILiquidityManager, SqrtPriceCalculator, Co
     IMultiAMM public immutable amm;
     address public immutable WETH9;
     mapping(address => bool) public whitelisted;
-    MockPriceFeed public ethUsdPriceFeed;
+    ETHPriceFeedConsumer public ethUsdPriceFeed;
     uint256 public constant MARKET_CAP_THRESHOLD = 85_000 * 1e8;
 
     modifier onlyWhitelisted() {
@@ -47,7 +47,7 @@ abstract contract LiquidityManager is ILiquidityManager, SqrtPriceCalculator, Co
         amm = IMultiAMM(_amm);
         whitelisted[owner] = true;
         whitelisted[_ico] = true;
-        ethUsdPriceFeed = MockPriceFeed(_ethUsdPriceFeed);
+        ethUsdPriceFeed = ETHPriceFeedConsumer(_ethUsdPriceFeed);
     }
 
     function getOwnerShares(address tokenAddress) external view override returns (uint256, uint256) {

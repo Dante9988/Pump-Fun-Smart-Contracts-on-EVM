@@ -12,7 +12,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 10,
+            runs: 1,
           },
           metadata: {
             bytecodeHash: 'none',
@@ -38,18 +38,23 @@ const config: HardhatUserConfig = {
       gas: 5000000,
       gasPrice: 20000000000,
     },
+    baseSepolia: {
+      url: 'https://base-sepolia.g.alchemy.com/v2/7KbVOrGpJ0Fu-91p9jFK904-Sc2mZSbs',
+      chainId: 84532,
+      accounts: [`${process.env.PRIVATE_KEY}`],
+    },
   },
   etherscan: {
     apiKey: {
-      cc3: "ABC"
+      baseSepolia: "ABC"
     },
     customChains: [
       {
-        network: "cc3",
-        chainId: 102031,
+        network: "baseSepolia",
+        chainId: 84532,
         urls: {
-          apiURL: "https://creditcoin-testnet.blockscout.com/api",
-          browserURL: "https://creditcoin-testnet.blockscout.com/",
+          apiURL: "https://base-sepolia.blockscout.com/api",
+          browserURL: "https://base-sepolia.blockscout.com/",
         },
       }
     ]

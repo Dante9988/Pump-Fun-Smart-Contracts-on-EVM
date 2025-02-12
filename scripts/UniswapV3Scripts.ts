@@ -165,10 +165,12 @@ export async function deployUniswapV3(signer: HardhatEthersSigner, mintAmount: B
     let transaction = await ERC20Contract.approve(NFTPositionManager.address, MINT_AMOUNT);
     await transaction.wait();
     console.log(`ERC20 approve transaction hash: ${transaction.hash}`);
-    transaction = await WETH9Contract.deposit({ value: BigInt(100) * BigInt(10 ** 18) });
+
+    transaction = await WETH9Contract.deposit({ value: ethers.utils.parseUnits("0.01", 18) });
     await transaction.wait();
     console.log(`WETH9 deposit transaction hash: ${transaction.hash}`);
-    transaction = await WETH9Contract.approve(NFTPositionManager.address, BigInt(10 ** 18));
+
+    transaction = await WETH9Contract.approve(NFTPositionManager.address, BigInt(10000) * BigInt(10 ** 18));
     await transaction.wait();
     console.log(`WETH9 approve transaction hash: ${transaction.hash}`);
 

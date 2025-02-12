@@ -17,7 +17,6 @@ library PriceLib {
     ) internal view returns (uint256) {
         // Get token price in WETH (18 decimals)
         (uint256 priceInWeth, ) = amm.getTokenPrice(tokenAddress, WETH9);
-        console.log("Price in WETH from AMM:", priceInWeth);
 
         bytes32 poolId = amm._getPoolId(tokenAddress, WETH9);
         // If zeroPriceActive is true, return 0
@@ -28,12 +27,10 @@ library PriceLib {
         // Get ETH price in USD (8 decimals)
         (, int256 ethUsdPrice, , , ) = priceFeed.latestRoundData();
         require(ethUsdPrice > 0, "Invalid ETH/USD price");
-        console.log("ETH price in USD:", uint256(ethUsdPrice));
 
         // Calculate USD price with 8 decimals:
         // priceInWeth (18 decimals) * ethUsdPrice (8 decimals) / 1e18
         uint256 priceUSD = (priceInWeth * uint256(ethUsdPrice)) / 1e18;
-        console.log("Calculated price in USD:", priceUSD);
 
         return priceUSD;
     }
