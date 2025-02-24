@@ -65,8 +65,8 @@ describe('ICO', () => {
         uniswapV3 = await deployUniswapV3(deployer, ethers.utils.parseUnits('1000000000', 18));
 
         // Deploy our mock price feed with initial ETH price of $3400 (with 8 decimals)
-        const ETHPriceFeedConsumer = await ethers.getContractFactory('ETHPriceFeedConsumer');
-        mockPriceFeed = await ETHPriceFeedConsumer.deploy();
+        const MockPriceFeed = await ethers.getContractFactory('MockPriceFeed');
+        mockPriceFeed = await MockPriceFeed.deploy(340000000000);
         await mockPriceFeed.deployed();
 
         // Deploy MultiAMM
