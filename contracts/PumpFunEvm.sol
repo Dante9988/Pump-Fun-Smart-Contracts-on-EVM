@@ -6,7 +6,7 @@ import "./libs/PriceLib.sol";
 import "./abstract/LiquidityManager.sol";
 import "./abstract/TokenManager.sol";
 
-contract ICO is LiquidityManager, TokenManager {
+contract PumpFunEvm is LiquidityManager, TokenManager {
     
     using PriceLib for address;
 

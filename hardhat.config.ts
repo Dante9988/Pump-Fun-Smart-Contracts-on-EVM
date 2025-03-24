@@ -46,15 +46,15 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-      baseSepolia: "ABC"
+      cc3: "ABC"
     },
     customChains: [
       {
-        network: "baseSepolia",
-        chainId: 84532,
+        network: "cc3",
+        chainId: 102031,
         urls: {
-          apiURL: "https://base-sepolia.blockscout.com/api",
-          browserURL: "https://base-sepolia.blockscout.com/",
+          apiURL: "https://creditcoin-testnet.blockscout.com/api",
+          browserURL: "https://creditcoin-testnet.blockscout.com/",
         },
       }
     ]

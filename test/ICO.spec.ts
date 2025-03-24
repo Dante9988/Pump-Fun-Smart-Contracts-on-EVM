@@ -64,9 +64,9 @@ describe('ICO', () => {
         nonWhitelisted = accounts[1];
         uniswapV3 = await deployUniswapV3(deployer, ethers.utils.parseUnits('1000000000', 18));
 
-        // Deploy our mock price feed with initial ETH price of $3400 (with 8 decimals)
+        // Deploy our mock price feed with initial ETH price of $2000 (with 8 decimals)
         const MockPriceFeed = await ethers.getContractFactory('MockPriceFeed');
-        mockPriceFeed = await MockPriceFeed.deploy(340000000000);
+        mockPriceFeed = await MockPriceFeed.deploy(200000000000);
         await mockPriceFeed.deployed();
 
         // Deploy MultiAMM
@@ -77,7 +77,7 @@ describe('ICO', () => {
         console.log(`MultiAMM deployed at: ${multiAMM.address}`);
 
         // Deploy LiquidityProvider
-        const LiquidityProvider = await ethers.getContractFactory('ICO');
+        const LiquidityProvider = await ethers.getContractFactory('PumpFunEvm');
         liquidityProvider = await LiquidityProvider.deploy(
             uniswapV3.V3Factory.address, 
             uniswapV3.NFTManager.address, 

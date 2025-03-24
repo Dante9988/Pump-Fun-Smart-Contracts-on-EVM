@@ -20,13 +20,13 @@ let signer: SignerWithAddress;
 let user1: SignerWithAddress;
 let user2: SignerWithAddress;
 let transaction: TransactionResponse;
-let IERC20: Token__factory;
+let tokenFactory: Token__factory;
 const tokens = (n: number) => {
     return ethers.utils.parseUnits(n.toString(), 'ether');
 } 
 
 const deploy = async () => {
-    IERC20 = await ethers.getContractFactory("Token");
+    tokenFactory = await ethers.getContractFactory("Token") as Token__factory;
     // signers = await ethers.getSigners();
     // signer = signers[0];
     // user1 = signers[1];
@@ -138,9 +138,9 @@ const deploy = async () => {
 
     // Check initial balances
     const deployerWETHBefore = await uniswapV3.WETH9.balanceOf(deployer.address);
-    const deployerTokenBefore = await IERC20.attach(tokenAddress).balanceOf(deployer.address);
+    const deployerTokenBefore = await tokenFactory.attach(tokenAddress).balanceOf(deployer.address);
     const ammWETHBefore = await uniswapV3.WETH9.balanceOf(multiAMM.address);
-    const ammTokenBefore = await IERC20.attach(tokenAddress).balanceOf(multiAMM.address);
+    const ammTokenBefore = await tokenFactory.attach(tokenAddress).balanceOf(multiAMM.address);
 
     console.log("Balances before swap:", {
         deployer: {
